@@ -1,0 +1,59 @@
+/**
+ * Variáveis CSS globais — espelham theme/tokens.ts.
+ * Use var(--csm-*) em componentes ou para estilos em CSS.
+ */
+:root {
+  /* Cores de fundo */
+  --csm-bg: #0f1115;
+  --csm-bg-elevated: #131824;
+  --csm-bg-input: #171b23;
+
+  /* Bordas */
+  --csm-border: #2a3142;
+  --csm-border-strong: #334155;
+  --csm-border-input: #475569;
+
+  /* Texto */
+  --csm-text: #eef2ff;
+  --csm-text-secondary: #e2e8f0;
+  --csm-text-muted: #94a3b8;
+  --csm-text-dim: #64748b;
+
+  /* Ações */
+  --csm-primary: #2f6df6;
+  --csm-primary-light: #60a5fa;
+  --csm-accent: #3b82f6;
+
+  /* Feedback */
+  --csm-success: #22c55e;
+  --csm-error: #f87171;
+  --csm-warning: #fbbf24;
+  --csm-gold: #fbbf24;
+
+  /* Espaçamento */
+  --csm-space-xs: 4px;
+  --csm-space-sm: 8px;
+  --csm-space-md: 12px;
+  --csm-space-lg: 16px;
+  --csm-space-xl: 20px;
+  --csm-space-2xl: 24px;
+
+  /* Raios */
+  --csm-radius-sm: 6px;
+  --csm-radius-md: 8px;
+  --csm-radius-lg: 10px;
+  --csm-radius-xl: 12px;
+
+  /* Tipografia */
+  --csm-font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--csm-font-family);
+  -webkit-font-smoothing: antialiased;
+}

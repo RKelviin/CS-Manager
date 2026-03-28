@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  password      String
+  walletBalance Int      @default(1000)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  teams         Team[]
+  seasons       Season[]
+}
+
+model Team {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  wins          Int       @default(0)
+  losses        Int       @default(0)
+  rating        Int        @default(1500)
+  matchesPlayed Int        @default(0)
+  lastMatchAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  players       Player[]
+
+  matchesAsA       Match[]             @relation("MatchTeamA")
+  matchesAsB       Match[]             @relation("MatchTeamB")
+  matchesWon       Match[]             @relation("MatchWinner")
+  ratingHistory    TeamRatingHistory[]
+
+  @@index([userId])
+}
+
+model Player {
+  id          String   @id @default(cuid())
+  teamId      String
+  team        Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name        String
+  role        String   // Sniper | Entry | Support | Lurker | IGL
+  aim         Int
+  reflex      Int
+  decision    Int
+  composure   Int
+  isStarter   Boolean  @default(false)
+  nationality String?  // ISO 3166-1 alpha-2 (BR, US, etc.)
+  avatarUrl   String?
+  sortOrder   Int      @default(0) // Ordem no bench (0 = starter)
+  templateId  String?  // Referência ao catálogo (opcional para jogadores antigos)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  matchStats MatchPlayerStat[]
+
+  @@index([teamId])
+}
+
+/// Catálogo global de 100 jogadores únicos. Novos jogadores virão de boosters.
+model PlayerTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  role        String   // Sniper | Entry | Support | Lurker | IGL
+  aim         Int
+  reflex      Int
+  decision    Int
+  composure   Int
+  nationality String?  // ISO 3166-1 alpha-2
+  rarity      String   @default("common") // common | rare | epic | legendary
+  price       Int      // Preço base no mercado
+  createdAt   DateTime @default(now())
+
+  @@unique([name])
+}
+
+model Season {
+  id                 String   @id @default(cuid())
+  userId             String?  // null = sistema; preenchido = liga do usuário (seu time vs 3 NPC)
+  user               User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  status             String   @default("draft") // draft | active | finished
+  championshipFormat Int?     // 2 | 4 | 8 para copa eliminatória; null = liga
+  bracketState       Json?    // { teamIds, roundMatchIds, roundConfigs } para avançar rounds
+  createdAt          DateTime @default(now())
+  matches            Match[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Match {
+  id        String   @id @default(cuid())
+  seasonId  String
+  season    Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  round     Int      // 1-6 para todos-contra-todos
+  teamAId   String
+  teamA     Team     @relation("MatchTeamA", fields: [teamAId], references: [id], onDelete: Cascade)
+  teamBId   String
+  teamB     Team     @relation("MatchTeamB", fields: [teamBId], references: [id], onDelete: Cascade)
+  winnerId  String?
+  winner    Team?    @relation("MatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  scoreA    Int      @default(0)
+  scoreB    Int      @default(0)
+  status    String   @default("scheduled") // scheduled | finished
+  matchType String   @default("tournament") // tournament | friendly
+  createdAt DateTime @default(now())
+
+  playerStats     MatchPlayerStat[]
+  ratingHistory   TeamRatingHistory[]
+
+  @@index([seasonId])
+  @@index([status])
+}
+
+model TeamRatingHistory {
+  id           String   @id @default(cuid())
+  teamId       String
+  team         Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  matchId      String
+  match        Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  ratingBefore Int
+  ratingAfter  Int
+  ratingDelta  Int
+  opponentId   String
+  result       Float    // 1.0 win, 0.5 draw, 0.0 loss
+  kFactor      Int
+  createdAt    DateTime @default(now())
+
+  @@index([teamId])
+  @@index([matchId])
+}
+
+model MatchPlayerStat {
+  id       String @id @default(cuid())
+  matchId  String
+  match    Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  kills    Int    @default(0)
+  deaths   Int    @default(0)
+  assists  Int    @default(0)
+
+  @@unique([matchId, playerId])
+  @@index([matchId])
+  @@index([playerId])
+}

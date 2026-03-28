@@ -1,0 +1,169 @@
+/**
+ * Mapa customizado: Mirage
+ * Gerado pelo Editor de mapas.
+ */
+import type { MapData } from "./mapTypes";
+
+export const MIRAGE_MAP: MapData = {
+  "name": "Mirage",
+  "width": 800,
+  "height": 600,
+  "walls": [
+    {
+      "x": 0,
+      "y": 0,
+      "width": 800,
+      "height": 10
+    },
+    {
+      "x": 0,
+      "y": 590,
+      "width": 800,
+      "height": 10
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "width": 10,
+      "height": 600
+    },
+    {
+      "x": 790,
+      "y": 0,
+      "width": 10,
+      "height": 600
+    },
+    {
+      "x": 590,
+      "y": 160,
+      "width": 50,
+      "height": 90
+    },
+    {
+      "x": 160,
+      "y": 310,
+      "width": 50,
+      "height": 80
+    },
+    {
+      "x": 640,
+      "y": 430,
+      "width": 150,
+      "height": 160
+    },
+    {
+      "x": 10,
+      "y": 490,
+      "width": 180,
+      "height": 100
+    },
+    {
+      "x": 280,
+      "y": 130,
+      "width": 110,
+      "height": 40
+    },
+    {
+      "x": 430,
+      "y": 310,
+      "width": 70,
+      "height": 100
+    },
+    {
+      "x": 430,
+      "y": 250,
+      "width": 210,
+      "height": 60
+    },
+    {
+      "x": 160,
+      "y": 250,
+      "width": 180,
+      "height": 60
+    }
+  ],
+  "zones": [
+    {
+      "id": "site-a",
+      "name": "Site A",
+      "x": 650,
+      "y": 50,
+      "width": 100,
+      "height": 100,
+      "type": "site"
+    },
+    {
+      "id": "site-b",
+      "name": "Site B",
+      "x": 50,
+      "y": 50,
+      "width": 100,
+      "height": 100,
+      "type": "site"
+    },
+    {
+      "id": "spawn-t",
+      "name": "T Spawn",
+      "x": 300,
+      "y": 500,
+      "width": 200,
+      "height": 80,
+      "type": "spawn"
+    },
+    {
+      "id": "spawn-ct",
+      "name": "CT Spawn",
+      "x": 300,
+      "y": 20,
+      "width": 200,
+      "height": 80,
+      "type": "spawn"
+    }
+  ],
+  "spawnPoints": {
+    "RED": [
+      {
+        "x": 320,
+        "y": 540
+      },
+      {
+        "x": 360,
+        "y": 540
+      },
+      {
+        "x": 400,
+        "y": 540
+      },
+      {
+        "x": 440,
+        "y": 540
+      },
+      {
+        "x": 480,
+        "y": 540
+      }
+    ],
+    "BLU": [
+      {
+        "x": 320,
+        "y": 60
+      },
+      {
+        "x": 360,
+        "y": 60
+      },
+      {
+        "x": 400,
+        "y": 60
+      },
+      {
+        "x": 440,
+        "y": 60
+      },
+      {
+        "x": 480,
+        "y": 60
+      }
+    ]
+  }
+};

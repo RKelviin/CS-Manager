@@ -4,11 +4,13 @@ type Props = {
   onUserClick: () => void;
   userName: string | null;
   isLoggedIn: boolean;
+  /** Espaço à esquerda quando o menu está recolhido (evita sobrepor o botão fixo do menu) */
+  leadingInsetPx?: number;
 };
 
 const { colors, spacing, radii, typography, zIndex } = theme;
 
-export const Header = ({ onUserClick, userName, isLoggedIn }: Props) => {
+export const Header = ({ onUserClick, userName, isLoggedIn, leadingInsetPx = 0 }: Props) => {
   return (
     <header
       style={{
@@ -16,6 +18,7 @@ export const Header = ({ onUserClick, userName, isLoggedIn }: Props) => {
         alignItems: "center",
         justifyContent: "space-between",
         padding: `${spacing.md}px ${spacing.xl}px`,
+        paddingLeft: spacing.xl + leadingInsetPx,
         background: colors.bgElevated,
         borderBottom: `1px solid ${colors.border}`,
         position: "sticky",

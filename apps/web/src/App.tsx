@@ -14,7 +14,7 @@ import { AuthProvider, useAuth } from "./features/auth";
 import { TeamProvider } from "./features/team";
 import { MarketProvider } from "./features/market";
 import { MatchProvider } from "./features/replay";
-import { Header, Sidebar } from "./components/Layout";
+import { Header, Sidebar, SIDEBAR_WIDTH_EXPANDED } from "./components/Layout";
 import { theme } from "./theme";
 import { useCallback, useMemo, useState } from "react";
 
@@ -35,11 +35,10 @@ const NAV_ITEMS = [
 
 type NavKey = (typeof NAV_ITEMS)[number]["key"] | "auth" | "user";
 
-const SIDEBAR_WIDTH = 260;
-
 const AppContent = () => {
   const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<NavKey>("dashboard");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleWatchMatch = useCallback((matchId: string) => {
     setActiveTab("simulation");
@@ -73,6 +72,10 @@ const AppContent = () => {
       ? 1520
       : 800;
 
+  const sidebarWidth = sidebarCollapsed ? 0 : SIDEBAR_WIDTH_EXPANDED;
+  /** 44px botão + 8px respiro alinhado ao padding do header */
+  const headerMenuInset = sidebarCollapsed ? 52 : 0;
+
   return (
     <main
       style={{
@@ -86,12 +89,20 @@ const AppContent = () => {
         items={[...NAV_ITEMS]}
         activeKey={NAV_ITEMS.some((n) => n.key === activeTab) ? activeTab : "dashboard"}
         onSelect={(key) => setActiveTab(key as NavKey)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={() => setSidebarCollapsed((c) => !c)}
       />
-      <div style={{ marginLeft: SIDEBAR_WIDTH }}>
+      <div
+        style={{
+          marginLeft: sidebarWidth,
+          transition: "margin-left 0.2s ease"
+        }}
+      >
         <Header
           onUserClick={handleUserClick}
           userName={user?.name ?? null}
           isLoggedIn={!!user}
+          leadingInsetPx={headerMenuInset}
         />
         <div
           style={{

@@ -19,6 +19,31 @@ export type MapZone = {
 
 export type MapSpawnPoint = { x: number; y: number };
 
+export type MapInterestPointType = "angle" | "flank" | "choke" | "cover";
+
+export type MapInterestPointSide = "TR" | "CT" | "both";
+
+export type MapInterestPoint = {
+  id: string;
+  x: number;
+  y: number;
+  type: MapInterestPointType;
+  side: MapInterestPointSide;
+  /** Pré-mira sugerida (rad) */
+  aimAngle?: number;
+};
+
+export type MapTacticalSpotSide = "TR" | "CT" | "both";
+
+export type MapTacticalSpot = {
+  x: number;
+  y: number;
+  watchAngle: number;
+  label: string;
+  /** Quando omitido, trata-se como "both" no engine */
+  side?: MapTacticalSpotSide;
+};
+
 export type MapData = {
   name: string;
   width: number;
@@ -29,6 +54,8 @@ export type MapData = {
     RED: MapSpawnPoint[];
     BLU: MapSpawnPoint[];
   };
+  interestPoints?: MapInterestPoint[];
+  tacticalSpots?: MapTacticalSpot[];
 };
 
 /** Centro dos sites para plant/defuse (site-a, site-b) */
@@ -51,5 +78,7 @@ export const EMPTY_MAP: MapData = {
   spawnPoints: {
     RED: [],
     BLU: []
-  }
+  },
+  interestPoints: [],
+  tacticalSpots: []
 };

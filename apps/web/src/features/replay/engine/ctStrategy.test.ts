@@ -4,6 +4,7 @@ import {
   getCtSiteForBot,
   isCtDefendStrategy
 } from "./ctStrategy";
+import { defaultStrategyWeights } from "./strategyLearning";
 import type { Bot, MatchState } from "../types";
 
 const mkBot = (overrides: Partial<Bot> = {}): Bot =>
@@ -31,6 +32,15 @@ const mkState = (overrides: Partial<MatchState> = {}): MatchState =>
     score: { RED: 0, BLU: 0 },
     tsExecuteSite: "site-a",
     teamAStartsAs: "TR",
+    bombPlanted: false,
+    redStrategy: "default",
+    bluStrategy: "default",
+    strategyHistory: [],
+    strategyWeights: defaultStrategyWeights(),
+    customRedStrategies: [],
+    customBluStrategies: [],
+    activeTrStrategyKey: "default",
+    activeCtStrategyKey: "default",
     ...overrides
   }) as MatchState;
 
@@ -91,7 +101,7 @@ describe("chooseBluStrategyForRound", () => {
   it("round 1 sempre default", () => {
     const state = mkState({ round: 1 });
     const cts = [mkBot(), mkBot(), mkBot(), mkBot(), mkBot()];
-    expect(chooseBluStrategyForRound(state, cts)).toBe("default");
+    expect(chooseBluStrategyForRound(state, cts).strategy).toBe("default");
   });
 
   it("eco sem rifles: stack no site de execucao", () => {
@@ -103,18 +113,19 @@ describe("chooseBluStrategyForRound", () => {
       mkBot({ money: 550, primaryWeapon: "USP-S" }),
       mkBot({ money: 450, primaryWeapon: "Glock-18" })
     ];
-    expect(chooseBluStrategyForRound(state, cts)).toBe("stack-a");
+    expect(chooseBluStrategyForRound(state, cts).strategy).toBe("stack-a");
   });
 
   it("deficit >= 2 e roundsToWin <= 4: stack no site de execucao", () => {
     const state = mkState({
-      round: 9,
-      score: { RED: 4, BLU: 6 },
+      round: 5,
+      score: { RED: 7, BLU: 5 },
       teamAStartsAs: "TR",
-      tsExecuteSite: "site-b"
+      tsExecuteSite: "site-b",
+      bluStrategy: "default"
     });
     const cts = [mkBot({ money: 4000 }), mkBot(), mkBot(), mkBot(), mkBot()];
-    expect(chooseBluStrategyForRound(state, cts)).toBe("stack-b");
+    expect(chooseBluStrategyForRound(state, cts).strategy).toBe("stack-b");
   });
 
   it("lead >= 2 com rifles: aggressive", () => {
@@ -130,6 +141,6 @@ describe("chooseBluStrategyForRound", () => {
       mkBot({ team: "BLU", primaryWeapon: "M4A4", money: 3500 }),
       mkBot({ team: "BLU", primaryWeapon: "M4A4", money: 3000 })
     ];
-    expect(chooseBluStrategyForRound(state, cts)).toBe("aggressive");
+    expect(chooseBluStrategyForRound(state, cts).strategy).toBe("aggressive");
   });
 });

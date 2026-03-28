@@ -51,6 +51,43 @@ export type RedStrategy = "rush" | "split" | "slow" | "default" | "fake";
 /** CT: default=3-2, stack-a/b=todos em um site, aggressive=push, hold=âncoras, retake=pós-plant */
 export type BluStrategy = "default" | "stack-a" | "stack-b" | "aggressive" | "hold" | "retake" | "rotate";
 
+export type CustomRedStrategy = {
+  id: string;
+  name: string;
+  baseType: RedStrategy;
+  createdAtRound: number;
+  archivedAtRound?: number;
+  /** Promovida após vitórias consecutivas com a emergente */
+  promoted?: boolean;
+  stats: { wins: number; losses: number };
+};
+
+export type CustomBluStrategy = {
+  id: string;
+  name: string;
+  baseType: BluStrategy;
+  createdAtRound: number;
+  archivedAtRound?: number;
+  promoted?: boolean;
+  stats: { wins: number; losses: number };
+};
+
+export type StrategyRoundHistoryEntry = {
+  round: number;
+  /** Estratégia exibida no estado (TR) */
+  redStrategy: RedStrategy;
+  /** Estratégia exibida no estado (CT) */
+  bluStrategy: BluStrategy;
+  /** Chave para pesos (base ou custom emergente) */
+  trStrategyKey: string;
+  ctStrategyKey: string;
+  winner: TeamSide | null;
+  trWon: boolean;
+  hadBombPlanted: boolean;
+  isEmergentTr: boolean;
+  isEmergentCt: boolean;
+};
+
 export type Bot = {
   id: string;
   name: string;
@@ -186,6 +223,18 @@ export type MatchState = {
     /** Bomba ja plantada no momento em que o round foi decidido (para bonus se plantar nos 5s finais) */
     hadBombPlantedAtResolve: boolean;
   } | null;
+  /** Histórico de estratégias TR/CT e resultado por round */
+  strategyHistory: StrategyRoundHistoryEntry[];
+  /** Pesos aprendidos: RED pool = chaves TR (rush, custom-*), BLU pool = CT */
+  strategyWeights: { RED: Record<string, number>; BLU: Record<string, number> };
+  customRedStrategies: CustomRedStrategy[];
+  customBluStrategies: CustomBluStrategy[];
+  /** Chave usada no round atual para pesos TR (igual a redStrategy se base) */
+  activeTrStrategyKey: string;
+  /** Chave usada no round atual para pesos CT */
+  activeCtStrategyKey: string;
+  /** Vivos TR vs CT no fim do último round resolvido (para pesos contextuais TR no round seguinte) */
+  lastRoundEndAlive?: { tr: number; ct: number };
 };
 
 export type MatchEvent =

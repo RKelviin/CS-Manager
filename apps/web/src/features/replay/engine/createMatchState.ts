@@ -4,6 +4,7 @@ import type { ArmorLoadout, Bot, MatchState, MatchSetup, RedStrategy, BluStrateg
 import { START_MONEY } from "./economyConstants";
 import { getCtTeam, getTrTeam } from "./matchConstants";
 import { BLU_ROLES, RED_ROLES } from "./roleCombat";
+import { defaultStrategyWeights } from "./strategyLearning";
 
 const DEFAULT_RED_NAMES = ["RED-1", "RED-2", "RED-3", "RED-4", "RED-5"];
 const DEFAULT_BLU_NAMES = ["BLU-1", "BLU-2", "BLU-3", "BLU-4", "BLU-5"];
@@ -168,7 +169,9 @@ function ensureMapValid(map: MapData): MapData {
     spawnPoints: {
       RED: red.slice(0, 5).map((p, i) => (p?.x != null ? p : fallbackRed[i])),
       BLU: blu.slice(0, 5).map((p, i) => (p?.x != null ? p : fallbackBlu[i]))
-    }
+    },
+    interestPoints: map.interestPoints ? [...map.interestPoints] : map.interestPoints,
+    tacticalSpots: map.tacticalSpots ? [...map.tacticalSpots] : map.tacticalSpots
   };
 }
 
@@ -244,6 +247,7 @@ export const createMatchState = (
 
   const round = init && "round" in init && "bots" in init ? (init as MatchState).round : 1;
   const matchType = setup.matchType ?? "friendly";
+  const prevMatch = init && "bots" in init ? (init as MatchState) : null;
   const redStrategy = pickStrategy(RED_STRATS);
   const tsExecuteSite = Math.random() < 0.5 ? "site-a" : "site-b";
   const bluStrategy: BluStrategy = "default";
@@ -251,6 +255,24 @@ export const createMatchState = (
   const sitePos = getSiteCenter(map, tsExecuteSite);
   const trLabel = setup.teamAStartsAs === "TR" ? setup.teamAName : setup.teamBName;
   const ctLabel = setup.teamAStartsAs === "TR" ? setup.teamBName : setup.teamAName;
+
+  const strategyHistory =
+    fullReset || !prevMatch ? [] : [...(prevMatch.strategyHistory ?? [])];
+  const strategyWeights =
+    fullReset || !prevMatch?.strategyWeights
+      ? defaultStrategyWeights()
+      : {
+          RED: { ...prevMatch.strategyWeights.RED },
+          BLU: { ...prevMatch.strategyWeights.BLU }
+        };
+  const customRedStrategies =
+    fullReset || !prevMatch?.customRedStrategies
+      ? []
+      : prevMatch.customRedStrategies.map((c) => ({ ...c, stats: { ...c.stats } }));
+  const customBluStrategies =
+    fullReset || !prevMatch?.customBluStrategies
+      ? []
+      : prevMatch.customBluStrategies.map((c) => ({ ...c, stats: { ...c.stats } }));
 
   return {
     teamAName: setup.teamAName,
@@ -297,6 +319,12 @@ export const createMatchState = (
       `Execucao ${trLabel}: site ${siteLabel} (~${Math.round(sitePos.x)}, ${Math.round(sitePos.y)})`,
       `${ctLabel} comeca como CT · ${trLabel} como TR · meio-tempo no round 7.`,
       "Partida pronta. Clique em Iniciar partida para simular."
-    ]
+    ],
+    strategyHistory,
+    strategyWeights,
+    customRedStrategies,
+    customBluStrategies,
+    activeTrStrategyKey: redStrategy,
+    activeCtStrategyKey: bluStrategy
   };
 };

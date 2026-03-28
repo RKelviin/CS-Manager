@@ -47,6 +47,7 @@ import {
   ROUND_WIN_BONUS
 } from "./economyConstants";
 import { chooseBluStrategyForRound, getCtSiteForBot } from "./ctStrategy";
+import { recordRoundStrategyLearning } from "./recordRoundStrategyLearning";
 import { damageAfterArmor } from "./roundBuy";
 import { applyMoraleAfterRound, applyPendingRoundAdvance, snapshotBotsForAdvance } from "./roundAdvance";
 import { clamp, pushLog, timeLabel } from "./matchUtils";
@@ -669,6 +670,8 @@ const resolveRound = (state: MatchState, winner: TeamSide, cause: string) => {
 
   pushLog(state, `[${timeLabel(state.timeLeftMs)}] Round ${state.round}: ${winner} venceu (${cause})`);
 
+  recordRoundStrategyLearning(state, winner);
+
   if (isCompetitiveOt) {
     if (state.otPeriodScore![winner] >= OT_POINTS_TO_WIN_PERIOD) {
       state.lastRoundResult = { roundNumber: state.round, winner, cause };
@@ -866,10 +869,12 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
         `[${timeLabel(state.timeLeftMs)}] ${carrier.name} plantou a C4 no site ${trPlantSite === "site-a" ? "A" : "B"}`
       );
       const ctTeam = getCtTeamFromState(state);
-      state.bluStrategy = chooseBluStrategyForRound(
+      const ctPick = chooseBluStrategyForRound(
         state,
         state.bots.filter((b) => b.team === ctTeam)
       );
+      state.bluStrategy = ctPick.strategy;
+      state.activeCtStrategyKey = ctPick.ctStrategyKey;
     }
     } else {
       state.plantProgressMs = 0;

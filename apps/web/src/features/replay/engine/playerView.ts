@@ -1,7 +1,7 @@
 /**
  * Visão localizada do bot: só o que ele pode ver (FOV+LOS) e ouvir (tiros).
  */
-import { canSeeWithFov, hasLineOfSight, heardGunfireEnemies } from "./situationalBrain";
+import { canSeeWithFov, hasLineOfSight, heardGunfireEnemies, THREAT_RADIUS } from "./situationalBrain";
 import { getWeaponFovForRole, getWeaponRangeForRole } from "./roleCombat";
 import { getTrTeamFromState } from "./matchConstants";
 import type { Bot, MatchState } from "../types";
@@ -19,6 +19,8 @@ export type PlayerView = {
   bombState: "none" | "planted" | "planting" | "defusing";
   alliesAlive: number;
   enemiesAlive: number;
+  /** Spots táticos próximos sem LOS — possível emergência de inimigo */
+  dangerSpots: { x: number; y: number; watchAngle: number; label: string }[];
 };
 
 const normalizeAngle = (a: number) => {
@@ -75,6 +77,14 @@ export function buildPlayerView(bot: Bot, state: MatchState): PlayerView {
   const alliesAlive = state.bots.filter((b) => b.team === bot.team && b.hp > 0).length;
   const enemiesAlive = state.bots.filter((b) => b.team !== bot.team && b.hp > 0).length;
 
+  const dangerRadius = THREAT_RADIUS * 2;
+  const dangerSpots: PlayerView["dangerSpots"] = [];
+  for (const s of state.mapData.tacticalSpots ?? []) {
+    if (dist(bot, s) > dangerRadius) continue;
+    if (hasLineOfSight(state.mapData, bot, { x: s.x, y: s.y }, rng)) continue;
+    dangerSpots.push({ x: s.x, y: s.y, watchAngle: s.watchAngle, label: s.label });
+  }
+
   return {
     botId: bot.id,
     enemiesInFov,
@@ -84,6 +94,7 @@ export function buildPlayerView(bot: Bot, state: MatchState): PlayerView {
     roundTimeLeft: state.timeLeftMs,
     bombState,
     alliesAlive,
-    enemiesAlive
+    enemiesAlive,
+    dangerSpots
   };
 }

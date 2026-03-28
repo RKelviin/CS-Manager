@@ -7,6 +7,7 @@ import { MarketPage } from "./pages/MarketPage";
 import { RankingPage } from "./pages/RankingPage";
 import { LiveMatchesPage } from "./pages/LiveMatchesPage";
 import { SimulationPage } from "./pages/SimulationPage";
+import { StrategiesPage } from "./pages/StrategiesPage";
 import { TeamPage } from "./pages/TeamPage";
 import { UserPage } from "./pages/UserPage";
 import { AuthProvider, useAuth } from "./features/auth";
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { key: "championships", label: "Campeonatos" },
   { key: "livematches", label: "Partidas ao vivo" },
   { key: "simulation", label: "Simulação" },
+  { key: "strategies", label: "Estratégias" },
   { key: "ranking", label: "Ranking" },
   { key: "mapeditor", label: "Editor de mapas" }
 ] as const;
@@ -48,6 +50,7 @@ const AppContent = () => {
     if (activeTab === "user") return <UserPage />;
     if (activeTab === "team") return <TeamPage />;
     if (activeTab === "simulation") return <SimulationPage />;
+    if (activeTab === "strategies") return <StrategiesPage />;
     if (activeTab === "livematches") return <LiveMatchesPage />;
     if (activeTab === "championships") return <ChampionshipPage />;
     if (activeTab === "market") return <MarketPage />;

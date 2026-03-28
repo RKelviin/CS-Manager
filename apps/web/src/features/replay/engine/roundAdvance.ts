@@ -255,8 +255,13 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
   state.plantProgressMs = fresh.plantProgressMs;
   state.defuseProgressMs = fresh.defuseProgressMs;
   state.defuserId = fresh.defuserId;
-  state.redStrategy = chooseRedStrategyForRound(state, trBots);
-  state.bluStrategy = chooseBluStrategyForRound(state, ctBots);
+  const trPick = chooseRedStrategyForRound(state, trBots);
+  state.redStrategy = trPick.strategy;
+  state.activeTrStrategyKey = trPick.trStrategyKey;
+
+  const ctPick = chooseBluStrategyForRound(state, ctBots);
+  state.bluStrategy = ctPick.strategy;
+  state.activeCtStrategyKey = ctPick.ctStrategyKey;
   pushLog(
     state,
     `Proximo round ${state.round}: ${state.round % 2 === 1 ? "RED-1" : "BLU-1"} inicia · RED ${state.redStrategy} | BLU ${state.bluStrategy} · exec T site ${fresh.tsExecuteSite === "site-a" ? "A" : "B"}`

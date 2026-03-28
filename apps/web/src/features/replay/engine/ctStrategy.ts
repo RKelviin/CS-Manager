@@ -1,37 +1,100 @@
 /**
  * Estratégia CT por round: defensão dos bombsites.
  * Depende de economia, armamento e placar.
- *
- * Matriz situação → estratégia:
- * | Situação            | Estratégia                    |
- * |---------------------|-------------------------------|
- * | Round 1             | default                       |
- * | Eco + poucos rifles | stack no site de execução     |
- * | Deficit >= 2        | stack no site de execução     |
- * | Lead >= 2 + rifles  | aggressive                    |
- * | Lead + rifles       | hold (25%) ou default         |
- * | Pós-plant           | retake (definido em runtime)  |
+ * Pesos aprendidos + emergentes.
  */
 import { weaponKind } from "../ui/weaponIcons";
 import type { BluStrategy, Bot, MatchState } from "../types";
 import { TEAM_ECO_AVG_THRESHOLD } from "./economyConstants";
 import { ROUNDS_TO_WIN_MATCH } from "./matchConstants";
 import { getCtTeamFromState } from "./matchConstants";
+import {
+  ALL_BLU_STRATEGY_KEYS,
+  BLU_BASE_KEYS_PRE_PLANT_EMERGENT,
+  DEFAULT_STRATEGY_WEIGHT,
+  ensureRoomForNewEmergentCustom,
+  ensureWeightKeys,
+  weightedPick
+} from "./strategyLearning";
+
+export type CtStrategyChoice = {
+  strategy: BluStrategy;
+  ctStrategyKey: string;
+  isEmergent: boolean;
+};
+
+const isBluStrategy = (s: string): s is BluStrategy =>
+  (ALL_BLU_STRATEGY_KEYS as string[]).includes(s);
+
+function createEmergentCtCombo(state: MatchState): string | null {
+  ensureRoomForNewEmergentCustom(state.customBluStrategies, state.round);
+  const active = state.customBluStrategies.filter((c) => !c.archivedAtRound);
+  if (active.length >= 5) return null;
+
+  const pool = [...BLU_BASE_KEYS_PRE_PLANT_EMERGENT];
+  const a = pool[Math.floor(Math.random() * pool.length)]!;
+  let b = pool[Math.floor(Math.random() * pool.length)]!;
+  let guard = 0;
+  while (b === a && guard++ < 8) b = pool[Math.floor(Math.random() * pool.length)]!;
+
+  const id = `emergent-ct-${a}-${b}-r${state.round}`;
+  if (state.customBluStrategies.some((c) => c.id === id)) return null;
+
+  const name = `${a} + ${b}`;
+  state.customBluStrategies.push({
+    id,
+    name,
+    baseType: a,
+    createdAtRound: state.round,
+    stats: { wins: 0, losses: 0 }
+  });
+  ensureWeightKeys(state);
+  state.strategyWeights.BLU[id] = DEFAULT_STRATEGY_WEIGHT;
+  return id;
+}
+
+function resolveCtPickFromKey(state: MatchState, key: string, isEmergent: boolean): CtStrategyChoice {
+  const custom = state.customBluStrategies.find((c) => c.id === key);
+  if (custom && !custom.archivedAtRound) {
+    return { strategy: custom.baseType, ctStrategyKey: key, isEmergent };
+  }
+  if (isBluStrategy(key)) {
+    return { strategy: key, ctStrategyKey: key, isEmergent: false };
+  }
+  return { strategy: "default", ctStrategyKey: "default", isEmergent: false };
+}
+
+function lastHistory(state: MatchState) {
+  const h = state.strategyHistory;
+  return h.length > 0 ? h[h.length - 1]! : null;
+}
+
+function trUsedRushLastTwoRounds(state: MatchState): boolean {
+  const tail = state.strategyHistory.slice(-2);
+  return tail.length >= 2 && tail.every((h) => h.redStrategy === "rush");
+}
+
+function trUsedFakeLastRound(state: MatchState): boolean {
+  const prev = lastHistory(state);
+  return prev?.redStrategy === "fake";
+}
 
 /**
  * Escolhe estratégia de defesa CT para o round.
- * - default (3-2): padrão, 3 no site de execução TR, 2 no outro
- * - stack-a / stack-b: todos em um site (eco ou placar desfavorável)
- * - aggressive: push quando em vantagem
- * - hold: âncoras, menos rotação (quando em vantagem com rifles, 25% chance)
  */
-export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): BluStrategy {
+export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): CtStrategyChoice {
   const { score, round, tsExecuteSite } = state;
   const ctTeam = getCtTeamFromState(state);
   const ctScore = score[ctTeam];
   const trScore = score[ctTeam === "RED" ? "BLU" : "RED"];
 
-  if (ctBots.length === 0) return "default";
+  const finish = (strategy: BluStrategy): CtStrategyChoice => ({
+    strategy,
+    ctStrategyKey: strategy,
+    isEmergent: false
+  });
+
+  if (ctBots.length === 0) return finish("default");
 
   const aliveCts = ctBots.filter((b) => b.hp > 0);
   if (state.bombPlanted && state.bombPlantSite) {
@@ -39,10 +102,10 @@ export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): Blu
     if (rifles) {
       const lateRotate =
         state.bombPlantSite !== tsExecuteSite || state.redStrategy === "fake";
-      if (aliveCts.length >= 3 && lateRotate) return "rotate";
-      return "retake";
+      if (aliveCts.length >= 3 && lateRotate) return finish("rotate");
+      return finish("retake");
     }
-    return "retake";
+    return finish("retake");
   }
 
   const igl = ctBots.find((b) => b.displayRole === "IGL" || b.role === "IGL");
@@ -54,34 +117,79 @@ export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): Blu
   const deficit = trScore - ctScore;
   const roundsToWin = ROUNDS_TO_WIN_MATCH - ctScore;
 
-  if (round <= 1) return "default";
+  if (round <= 1) return finish("default");
 
   if (avgMoney < TEAM_ECO_AVG_THRESHOLD && !rifles) {
     const stack = tsExecuteSite === "site-a" ? "stack-a" : "stack-b";
-    if (state.bluStrategy === stack && Math.random() < 0.2) return "default";
-    return stack;
+    if (state.bluStrategy === stack && Math.random() < 0.2) return finish("default");
+    return finish(stack);
   }
 
   if (deficit >= 2 && roundsToWin <= 4) {
     const stack = tsExecuteSite === "site-a" ? "stack-a" : "stack-b";
-    if (state.bluStrategy === stack && Math.random() < 0.2) return "default";
-    return stack;
+    if (state.bluStrategy === stack && Math.random() < 0.2) return finish("default");
+    return finish(stack);
   }
 
   if (ctScore >= trScore + 2 && rifles) {
-    if (state.bluStrategy === "aggressive" && Math.random() < 0.25) return "default";
-    return "aggressive";
+    if (state.bluStrategy === "aggressive" && Math.random() < 0.25) return finish("default");
+    return finish("aggressive");
   }
 
   if (ctScore >= trScore + 1 && rifles) {
     const holdChance = Math.max(0.1, Math.min(0.4, 0.15 + (decision - 50) / 200));
     if (Math.random() < holdChance) {
-      if (state.bluStrategy === "hold" && Math.random() < 0.3) return "default";
-      return "hold";
+      if (state.bluStrategy === "hold" && Math.random() < 0.3) return finish("default");
+      return finish("hold");
     }
   }
 
-  return "default";
+  ensureWeightKeys(state);
+
+  if (round % 3 === 0 && Math.random() < 0.12) {
+    createEmergentCtCombo(state);
+  }
+
+  const poolBlu: BluStrategy[] = ["default", "stack-a", "stack-b", "aggressive", "hold", "rotate"];
+  const weights: Record<string, number> = {};
+  for (const k of poolBlu) weights[k] = 1;
+
+  if (trUsedRushLastTwoRounds(state)) {
+    const stackKey = tsExecuteSite === "site-a" ? "stack-a" : "stack-b";
+    weights[stackKey] = (weights[stackKey] ?? 1) + 0.45;
+  }
+  if (trUsedFakeLastRound(state)) {
+    weights.default = (weights.default ?? 1) + 0.35;
+  }
+  if (Math.abs(ctScore - trScore) <= 1) {
+    weights.aggressive = (weights.aggressive ?? 1) * 0.65;
+  }
+
+  const customKeys = state.customBluStrategies
+    .filter((c) => !c.archivedAtRound && c.baseType !== "retake")
+    .map((c) => c.id);
+  const poolKeys = [...poolBlu, ...customKeys];
+
+  const pickKey = weightedPick(
+    poolKeys,
+    (k) => {
+      if (poolBlu.includes(k as BluStrategy)) {
+        const base = weights[k] ?? 1;
+        const learned = state.strategyWeights.BLU[k] ?? DEFAULT_STRATEGY_WEIGHT;
+        return base * learned;
+      }
+      return state.strategyWeights.BLU[k] ?? DEFAULT_STRATEGY_WEIGHT;
+    },
+    state.activeCtStrategyKey,
+    0.25
+  );
+
+  const isEmergent = pickKey.startsWith("emergent-ct-");
+  const choice = resolveCtPickFromKey(state, pickKey, isEmergent);
+  if (!state.bombPlanted && choice.strategy === "retake") {
+    return finish("default");
+  }
+  return choice;
 }
 
 /** Site que o CT deve defender conforme estratégia e slot (0-4) */
@@ -98,7 +206,7 @@ export function getCtSiteForBot(
     return slot < 2 ? planted : planted === "site-a" ? "site-b" : "site-a";
   }
   if (strategy === "default" || strategy === "hold") {
-    return slot < 3 ? tsExecuteSite : (tsExecuteSite === "site-a" ? "site-b" : "site-a");
+    return slot < 3 ? tsExecuteSite : tsExecuteSite === "site-a" ? "site-b" : "site-a";
   }
   return tsExecuteSite;
 }

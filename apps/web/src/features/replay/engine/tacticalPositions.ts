@@ -2,7 +2,7 @@
  * Posições táticas por role e estratégia: âncoras CT, formação TR, corredores.
  */
 import { getRushSequence } from "../map/mapWaypoints";
-import { getSiteCenters, type MapData } from "../map/mapTypes";
+import { getSiteCenters, type MapData, type MapInterestPoint } from "../map/mapTypes";
 import { getCtSiteForBot } from "./ctStrategy";
 import type { Bot, MatchState } from "../types";
 
@@ -35,6 +35,12 @@ const CT_ANCHOR_SITE_B: Record<string, TacticalPoint> = {
   Sniper: { x: 650, y: 180 }
 };
 
+const dist2 = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+  Math.hypot(a.x - b.x, a.y - b.y);
+
+const interestOk = (p: MapInterestPoint) =>
+  (p.side === "CT" || p.side === "both") && (p.type === "angle" || p.type === "cover");
+
 /** Posição de âncora para CT. Site conforme estratégia (3-2, stack-a, stack-b). */
 export function getCtHoldPosition(bot: Bot, state: MatchState): TacticalPoint {
   const map = state.mapData as MapData | undefined;
@@ -43,14 +49,33 @@ export function getCtHoldPosition(bot: Bot, state: MatchState): TacticalPoint {
   const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
   const siteCenter = centers ? centers[site] : null;
 
+  const roleKey = bot.displayRole ?? (bot.role === "AWP" ? "Sniper" : bot.role === "IGL" ? "IGL" : "Support");
+
+  const interest = map?.interestPoints?.filter(interestOk) ?? [];
+  if (siteCenter && interest.length > 0) {
+    const near = interest.filter((p) => dist2(p, siteCenter) < 220);
+    if (near.length > 0) {
+      const scored = near.map((p) => {
+        const dSite = dist2(p, siteCenter);
+        let score = dSite;
+        if (roleKey === "AWP" || roleKey === "Sniper") score = -dSite;
+        if (roleKey === "Entry") score = dSite * 0.85;
+        if (roleKey === "Lurker") score = Math.abs(p.x - siteCenter.x);
+        if (roleKey === "IGL") score = dSite * 1.1;
+        return { p, score };
+      });
+      scored.sort((a, b) => a.score - b.score);
+      const best = scored[0]!.p;
+      return jitter({ x: best.x, y: best.y });
+    }
+  }
+
   if (siteCenter) {
-    const roleKey = bot.displayRole ?? (bot.role === "AWP" ? "Sniper" : bot.role === "IGL" ? "IGL" : "Support");
     const offset = (roleKey === "AWP" || roleKey === "Sniper") ? { x: -60, y: -30 } : { x: 0, y: 20 };
     return jitter({ x: siteCenter.x + offset.x, y: siteCenter.y + offset.y });
   }
 
   const anchors = (site === "site-a" ? CT_ANCHOR_SITE_A : CT_ANCHOR_SITE_B) as Record<string, TacticalPoint>;
-  const roleKey = bot.displayRole ?? (bot.role === "AWP" ? "Sniper" : bot.role === "IGL" ? "IGL" : "Support");
   const pos = anchors[roleKey] ?? anchors.Support;
   return jitter(pos);
 }
@@ -75,7 +100,22 @@ export function getCtHoldPatrolPositions(bot: Bot, state: MatchState): TacticalP
   const nearSite = { x: siteCenter.x + offset * 0.6, y: siteCenter.y + 20 };
   const mid = { x: bluBase.x + offset * 0.3, y: (bluBase.y + siteCenter.y) / 2 };
 
-  return [choke, nearSite, mid];
+  const geo = [choke, nearSite, mid];
+  const spots = map?.tacticalSpots ?? [];
+  const fromSpots = spots
+    .filter((s) => (s.side ?? "both") === "CT" || (s.side ?? "both") === "both")
+    .filter((s) => dist2(s, siteCenter) < 260)
+    .map((s) => ({ x: s.x, y: s.y }));
+
+  if (fromSpots.length > 0) {
+    const merged = [...fromSpots];
+    for (const g of geo) {
+      if (!merged.some((m) => dist2(m, g) < 28)) merged.push(g);
+    }
+    return merged;
+  }
+
+  return geo;
 }
 
 /** Offsets de formação TR em relação ao carrier (direção = para o site). Formação mais unida para dominar site. */

@@ -106,6 +106,34 @@ class MatchRegistryImpl {
     return [...this.matches.keys()];
   }
 
+  /**
+   * Aplica mutação ao estado (ex.: reativar estratégia arquivada na StrategiesPage).
+   * Não passa pelo reducer de tick. Publica sempre nova referência de estado e de coleções tocadas
+   * para compatibilidade com useSyncExternalStore.
+   */
+  patchMatch(id: string, updater: (state: MatchState) => void): void {
+    const prev = this.matches.get(id);
+    if (!prev) return;
+    const next: MatchState = {
+      ...prev,
+      customRedStrategies: prev.customRedStrategies.map((c) => ({
+        ...c,
+        stats: { ...c.stats }
+      })),
+      customBluStrategies: prev.customBluStrategies.map((c) => ({
+        ...c,
+        stats: { ...c.stats }
+      })),
+      strategyWeights: {
+        RED: { ...prev.strategyWeights.RED },
+        BLU: { ...prev.strategyWeights.BLU }
+      }
+    };
+    updater(next);
+    this.matches.set(id, next);
+    this.notify(id, next);
+  }
+
   /** Envia um evento para a partida. */
   dispatch(id: string, event: MatchEvent): void {
     const state = this.matches.get(id);

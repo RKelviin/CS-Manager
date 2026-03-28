@@ -1,5 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import type { MapData } from "../features/replay/map/mapTypes";
+import type {
+  MapData,
+  MapInterestPoint,
+  MapInterestPointSide,
+  MapInterestPointType,
+  MapTacticalSpot
+} from "../features/replay/map/mapTypes";
 import { EMPTY_MAP } from "../features/replay/map/mapTypes";
 import { DUST2_MAP } from "../features/replay/map/dust2Map";
 import { saveMapToFolder } from "../features/replay/map/mapRegistry";
@@ -7,7 +13,26 @@ import { saveMapToFolder } from "../features/replay/map/mapRegistry";
 const GRID = 10;
 const SNAP = (v: number) => Math.round(v / GRID) * GRID;
 
-type Tool = "select" | "wall" | "zone-site" | "zone-spawn" | "spawn-red" | "spawn-blu";
+type Tool =
+  | "select"
+  | "wall"
+  | "zone-site"
+  | "zone-spawn"
+  | "spawn-red"
+  | "spawn-blu"
+  | "interest-point"
+  | "tactical-spot";
+
+type EditorSelection =
+  | { type: "wall"; index: number }
+  | { type: "zone"; index: number }
+  | { type: "spawn"; index: number; team: "RED" | "BLU" }
+  | { type: "interest"; index: number }
+  | { type: "tactical"; index: number }
+  | null;
+
+const interestIcon = (t: MapInterestPointType) =>
+  t === "angle" ? "⭐" : t === "flank" ? "⚡" : t === "choke" ? "◆" : "🎯";
 
 const dust2ToMapData = (): MapData => ({
   name: DUST2_MAP.name,
@@ -18,14 +43,30 @@ const dust2ToMapData = (): MapData => ({
   spawnPoints: {
     RED: DUST2_MAP.spawnPoints.RED.map((p) => ({ ...p })),
     BLU: DUST2_MAP.spawnPoints.BLU.map((p) => ({ ...p }))
-  }
+  },
+  interestPoints: (DUST2_MAP.interestPoints ?? []).map((p) => ({ ...p })),
+  tacticalSpots: (DUST2_MAP.tacticalSpots ?? []).map((p) => ({ ...p }))
 });
 
 export const MapEditorPage = () => {
   const [map, setMap] = useState<MapData>(() => dust2ToMapData());
   const [tool, setTool] = useState<Tool>("select");
   const [exportStatus, setExportStatus] = useState<string | null>(null);
-  const [selected, setSelected] = useState<{ type: "wall" | "zone" | "spawn"; index: number; team?: "RED" | "BLU" } | null>(null);
+  const [selected, setSelected] = useState<EditorSelection>(null);
+  const [interestModal, setInterestModal] = useState<{
+    x: number;
+    y: number;
+    type: MapInterestPointType;
+    side: MapInterestPointSide;
+    aimDeg: string;
+  } | null>(null);
+  const [tacticalModal, setTacticalModal] = useState<{
+    x: number;
+    y: number;
+    label: string;
+    watchDeg: string;
+    side: "TR" | "CT" | "both";
+  } | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragEnd, setDragEnd] = useState<{ x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -130,6 +171,37 @@ export const MapEditorPage = () => {
       ctx.textBaseline = "alphabetic";
     });
 
+    (map.interestPoints ?? []).forEach((p, i) => {
+      const sel = selected?.type === "interest" && selected.index === i;
+      ctx.font = sel ? "18px sans-serif" : "16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(interestIcon(p.type), p.x, p.y);
+      if (sel) {
+        ctx.strokeStyle = "#a78bfa";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
+
+    (map.tacticalSpots ?? []).forEach((s, i) => {
+      const sel = selected?.type === "tactical" && selected.index === i;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, sel ? 8 : 6, 0, Math.PI * 2);
+      ctx.fillStyle = sel ? "rgba(34,197,94,0.85)" : "rgba(34,197,94,0.45)";
+      ctx.fill();
+      ctx.strokeStyle = "#22c55e";
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.font = "10px Inter, sans-serif";
+      ctx.fillText(s.label, s.x + 10, s.y - 8);
+    });
+
     if (dragStart && dragEnd) {
       const x = Math.min(dragStart.x, dragEnd.x);
       const y = Math.min(dragStart.y, dragEnd.y);
@@ -146,6 +218,16 @@ export const MapEditorPage = () => {
 
   const hitTest = useCallback(
     (cx: number, cy: number) => {
+      const ts = map.tacticalSpots ?? [];
+      for (let i = ts.length - 1; i >= 0; i--) {
+        const s = ts[i]!;
+        if (Math.hypot(cx - s.x, cy - s.y) <= 11) return { type: "tactical" as const, index: i };
+      }
+      const ip = map.interestPoints ?? [];
+      for (let i = ip.length - 1; i >= 0; i--) {
+        const p = ip[i]!;
+        if (Math.hypot(cx - p.x, cy - p.y) <= 18) return { type: "interest" as const, index: i };
+      }
       for (let i = map.walls.length - 1; i >= 0; i--) {
         const w = map.walls[i];
         if (cx >= w.x && cx <= w.x + w.width && cy >= w.y && cy <= w.y + w.height)
@@ -185,6 +267,14 @@ export const MapEditorPage = () => {
         ...m,
         spawnPoints: { ...m.spawnPoints, [team]: arr }
       }));
+      return;
+    }
+    if (tool === "interest-point") {
+      setInterestModal({ x, y, type: "angle", side: "CT", aimDeg: "" });
+      return;
+    }
+    if (tool === "tactical-spot") {
+      setTacticalModal({ x, y, label: "spot", watchDeg: "-90", side: "both" });
       return;
     }
     if (tool === "wall" || tool === "zone-site" || tool === "zone-spawn") {
@@ -235,6 +325,16 @@ export const MapEditorPage = () => {
           ...m.spawnPoints,
           [selected.team!]: m.spawnPoints[selected.team!].filter((_, i) => i !== selected.index)
         }
+      }));
+    } else if (selected.type === "interest") {
+      setMap((m) => ({
+        ...m,
+        interestPoints: (m.interestPoints ?? []).filter((_, i) => i !== selected.index)
+      }));
+    } else if (selected.type === "tactical") {
+      setMap((m) => ({
+        ...m,
+        tacticalSpots: (m.tacticalSpots ?? []).filter((_, i) => i !== selected.index)
       }));
     }
     setSelected(null);
@@ -295,6 +395,15 @@ export const MapEditorPage = () => {
       setExportStatus("Adicione zonas site-a e site-b.");
       return;
     }
+    const ipc = map.interestPoints?.length ?? 0;
+    const tsc = map.tacticalSpots?.length ?? 0;
+    if (ipc < 3 || tsc < 2) {
+      const msg = `Aviso: poucos dados táticos (pontos de interesse: ${ipc}, spots: ${tsc}). Recomenda-se ≥3 interesse e ≥2 spots para um mapa bem definido. Exportar mesmo assim?`;
+      if (!window.confirm(msg)) {
+        setExportStatus("Exportação cancelada — adicione mais pontos táticos ou confirme na próxima vez.");
+        return;
+      }
+    }
     setExportStatus(null);
     try {
       const { id, name } = await saveMapToFolder(map);
@@ -310,8 +419,30 @@ export const MapEditorPage = () => {
     { key: "zone-site", label: "Site (A/B)" },
     { key: "zone-spawn", label: "Spawn zone" },
     { key: "spawn-red", label: "+ Spawn TR" },
-    { key: "spawn-blu", label: "+ Spawn CT" }
+    { key: "spawn-blu", label: "+ Spawn CT" },
+    { key: "interest-point", label: "Ponto de interesse" },
+    { key: "tactical-spot", label: "Spot tático" }
   ];
+
+  const patchInterest = (index: number, patch: Partial<MapInterestPoint>) => {
+    setMap((m) => {
+      const list = [...(m.interestPoints ?? [])];
+      const cur = list[index];
+      if (!cur) return m;
+      list[index] = { ...cur, ...patch };
+      return { ...m, interestPoints: list };
+    });
+  };
+
+  const patchTactical = (index: number, patch: Partial<MapTacticalSpot>) => {
+    setMap((m) => {
+      const list = [...(m.tacticalSpots ?? [])];
+      const cur = list[index];
+      if (!cur) return m;
+      list[index] = { ...cur, ...patch };
+      return { ...m, tacticalSpots: list };
+    });
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -431,19 +562,308 @@ export const MapEditorPage = () => {
             cursor: tool === "select" ? "default" : "crosshair"
           }}
         />
-        <div style={{ minWidth: 200 }}>
+        <div style={{ minWidth: 280, maxWidth: 360, fontSize: 12 }}>
           <h3 style={{ fontSize: 14, marginBottom: 8 }}>Resumo</h3>
           <p style={{ fontSize: 13, color: "#94a3b8" }}>Paredes: {map.walls.length}</p>
           <p style={{ fontSize: 13, color: "#94a3b8" }}>Zonas: {map.zones.length}</p>
           <p style={{ fontSize: 13, color: "#94a3b8" }}>Spawns TR: {map.spawnPoints.RED.length}/5</p>
           <p style={{ fontSize: 13, color: "#94a3b8" }}>Spawns CT: {map.spawnPoints.BLU.length}/5</p>
+          <p style={{ fontSize: 13, color: "#94a3b8" }}>
+            Interesse: {(map.interestPoints ?? []).length} · Spots: {(map.tacticalSpots ?? []).length}
+          </p>
+
+          <h4 style={{ fontSize: 13, margin: "16px 0 8px" }}>Pontos de interesse</h4>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: 200, overflowY: "auto" }}>
+            {(map.interestPoints ?? []).map((p, i) => (
+              <li
+                key={p.id}
+                style={{
+                  padding: 8,
+                  marginBottom: 6,
+                  background: selected?.type === "interest" && selected.index === i ? "#2a3142" : "#1e293b",
+                  borderRadius: 6,
+                  border: "1px solid #334155"
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelected({ type: "interest", index: i })}
+                  style={{ background: "none", border: "none", color: "#e2e8f0", cursor: "pointer", padding: 0 }}
+                >
+                  {interestIcon(p.type)} {p.id.slice(0, 12)}… ({p.x},{p.y})
+                </button>
+                <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <select
+                    value={p.type}
+                    onChange={(e) => patchInterest(i, { type: e.target.value as MapInterestPointType })}
+                    style={inpCompact}
+                  >
+                    <option value="angle">angle</option>
+                    <option value="flank">flank</option>
+                    <option value="choke">choke</option>
+                    <option value="cover">cover</option>
+                  </select>
+                  <select
+                    value={p.side}
+                    onChange={(e) => patchInterest(i, { side: e.target.value as MapInterestPointSide })}
+                    style={inpCompact}
+                  >
+                    <option value="TR">TR</option>
+                    <option value="CT">CT</option>
+                    <option value="both">both</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="aim graus (opcional)"
+                    value={
+                      p.aimAngle != null ? String(Math.round((p.aimAngle * 180) / Math.PI)) : ""
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      patchInterest(i, {
+                        aimAngle: v === "" ? undefined : (parseFloat(v) * Math.PI) / 180
+                      });
+                    }}
+                    style={inpCompact}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <h4 style={{ fontSize: 13, margin: "16px 0 8px" }}>Spots táticos</h4>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: 200, overflowY: "auto" }}>
+            {(map.tacticalSpots ?? []).map((s, i) => (
+              <li
+                key={`${s.label}-${i}`}
+                style={{
+                  padding: 8,
+                  marginBottom: 6,
+                  background: selected?.type === "tactical" && selected.index === i ? "#2a3142" : "#1e293b",
+                  borderRadius: 6,
+                  border: "1px solid #334155"
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelected({ type: "tactical", index: i })}
+                  style={{ background: "none", border: "none", color: "#86efac", cursor: "pointer", padding: 0 }}
+                >
+                  {s.label}
+                </button>
+                <input
+                  type="text"
+                  value={s.label}
+                  onChange={(e) => patchTactical(i, { label: e.target.value })}
+                  style={{ ...inpCompact, marginTop: 6 }}
+                />
+                <input
+                  type="text"
+                  placeholder="watch graus"
+                  value={String(Math.round((s.watchAngle * 180) / Math.PI))}
+                  onChange={(e) => {
+                    const n = parseFloat(e.target.value);
+                    if (!Number.isFinite(n)) return;
+                    patchTactical(i, { watchAngle: (n * Math.PI) / 180 });
+                  }}
+                  style={{ ...inpCompact, marginTop: 4 }}
+                />
+                <select
+                  value={s.side ?? "both"}
+                  onChange={(e) =>
+                    patchTactical(i, { side: e.target.value as "TR" | "CT" | "both" })
+                  }
+                  style={{ ...inpCompact, marginTop: 4 }}
+                >
+                  <option value="TR">TR</option>
+                  <option value="CT">CT</option>
+                  <option value="both">both</option>
+                </select>
+              </li>
+            ))}
+          </ul>
+
           <p style={{ fontSize: 12, color: "#64748b", marginTop: 12 }}>
             Para usar o mapa na simulação, exporte como .ts e adicione em <code>apps/web/src/features/replay/map/</code>. Veja docs/MAPAS.md.
           </p>
         </div>
       </div>
+
+      {interestModal && (
+        <div style={modalOverlay}>
+          <div style={modalBox}>
+            <h3 style={{ marginTop: 0 }}>Novo ponto de interesse</h3>
+            <p style={{ color: "#94a3b8", fontSize: 13 }}>
+              Posição: {interestModal.x}, {interestModal.y}
+            </p>
+            <label style={lbl}>Tipo</label>
+            <select
+              value={interestModal.type}
+              onChange={(e) =>
+                setInterestModal((m) => (m ? { ...m, type: e.target.value as MapInterestPointType } : m))
+              }
+              style={inpCompact}
+            >
+              <option value="angle">angle ⭐</option>
+              <option value="flank">flank ⚡</option>
+              <option value="choke">choke ◆</option>
+              <option value="cover">cover 🎯</option>
+            </select>
+            <label style={lbl}>Lado</label>
+            <select
+              value={interestModal.side}
+              onChange={(e) =>
+                setInterestModal((m) => (m ? { ...m, side: e.target.value as MapInterestPointSide } : m))
+              }
+              style={inpCompact}
+            >
+              <option value="TR">TR</option>
+              <option value="CT">CT</option>
+              <option value="both">both</option>
+            </select>
+            <label style={lbl}>Ângulo pré-mira (graus, opcional)</label>
+            <input
+              value={interestModal.aimDeg}
+              onChange={(e) => setInterestModal((m) => (m ? { ...m, aimDeg: e.target.value } : m))}
+              style={inpCompact}
+              placeholder="ex: -90"
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setInterestModal(null)}
+                style={btnStyle}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = `ip-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+                  const aim =
+                    interestModal.aimDeg.trim() === "" || Number.isNaN(parseFloat(interestModal.aimDeg))
+                      ? undefined
+                      : (parseFloat(interestModal.aimDeg) * Math.PI) / 180;
+                  const pt: MapInterestPoint = {
+                    id,
+                    x: interestModal.x,
+                    y: interestModal.y,
+                    type: interestModal.type,
+                    side: interestModal.side,
+                    aimAngle: aim
+                  };
+                  setMap((m) => ({
+                    ...m,
+                    interestPoints: [...(m.interestPoints ?? []), pt]
+                  }));
+                  setInterestModal(null);
+                }}
+                style={{ ...btnStyle, background: "#2f6df6", borderColor: "#3b82f6" }}
+              >
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tacticalModal && (
+        <div style={modalOverlay}>
+          <div style={modalBox}>
+            <h3 style={{ marginTop: 0 }}>Novo spot tático</h3>
+            <p style={{ color: "#94a3b8", fontSize: 13 }}>
+              Posição: {tacticalModal.x}, {tacticalModal.y}
+            </p>
+            <label style={lbl}>Rótulo</label>
+            <input
+              value={tacticalModal.label}
+              onChange={(e) => setTacticalModal((m) => (m ? { ...m, label: e.target.value } : m))}
+              style={inpCompact}
+            />
+            <label style={lbl}>Watch angle (graus)</label>
+            <input
+              value={tacticalModal.watchDeg}
+              onChange={(e) => setTacticalModal((m) => (m ? { ...m, watchDeg: e.target.value } : m))}
+              style={inpCompact}
+            />
+            <label style={lbl}>Lado</label>
+            <select
+              value={tacticalModal.side}
+              onChange={(e) =>
+                setTacticalModal((m) =>
+                  m ? { ...m, side: e.target.value as "TR" | "CT" | "both" } : m
+                )
+              }
+              style={inpCompact}
+            >
+              <option value="TR">TR</option>
+              <option value="CT">CT</option>
+              <option value="both">both</option>
+            </select>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button type="button" onClick={() => setTacticalModal(null)} style={btnStyle}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const n = parseFloat(tacticalModal.watchDeg);
+                  const watchAngle = Number.isFinite(n) ? (n * Math.PI) / 180 : -Math.PI / 2;
+                  const spot: MapTacticalSpot = {
+                    x: tacticalModal.x,
+                    y: tacticalModal.y,
+                    watchAngle,
+                    label: tacticalModal.label.trim() || "spot",
+                    side: tacticalModal.side
+                  };
+                  setMap((m) => ({
+                    ...m,
+                    tacticalSpots: [...(m.tacticalSpots ?? []), spot]
+                  }));
+                  setTacticalModal(null);
+                }}
+                style={{ ...btnStyle, background: "#15803d", borderColor: "#22c55e" }}
+              >
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+};
+
+const inpCompact: React.CSSProperties = {
+  width: "100%",
+  padding: "6px 8px",
+  background: "#0f172a",
+  border: "1px solid #334155",
+  borderRadius: 6,
+  color: "#fff",
+  fontSize: 12
+};
+
+const lbl: React.CSSProperties = { display: "block", marginTop: 10, marginBottom: 4, color: "#94a3b8" };
+
+const modalOverlay: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.65)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000
+};
+
+const modalBox: React.CSSProperties = {
+  background: "#131824",
+  border: "1px solid #334155",
+  borderRadius: 12,
+  padding: 24,
+  minWidth: 300,
+  maxWidth: "90vw",
+  color: "#e2e8f0"
 };
 
 const btnStyle: React.CSSProperties = {

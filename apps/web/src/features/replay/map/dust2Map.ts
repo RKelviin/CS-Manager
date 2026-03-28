@@ -37,7 +37,24 @@ export const DUST2_MAP: MapData = {
       { x: 440, y: 60 },
       { x: 480, y: 60 }
     ]
-  }
+  },
+  interestPoints: [
+    { id: "d2-long-a", x: 520, y: 120, type: "angle", side: "CT", aimAngle: -Math.PI * 0.15 },
+    { id: "d2-short-a", x: 580, y: 280, type: "flank", side: "TR", aimAngle: -Math.PI * 0.35 },
+    { id: "d2-site-a-hold", x: 680, y: 95, type: "cover", side: "CT", aimAngle: Math.PI * 0.5 },
+    { id: "d2-mid-doors", x: 400, y: 260, type: "choke", side: "both", aimAngle: -Math.PI / 2 },
+    { id: "d2-b-apps", x: 180, y: 130, type: "angle", side: "both", aimAngle: Math.PI * 0.25 },
+    { id: "d2-site-b", x: 120, y: 95, type: "cover", side: "CT", aimAngle: 0 },
+    { id: "d2-lower-tunnel", x: 260, y: 420, type: "choke", side: "TR", aimAngle: -Math.PI * 0.4 }
+  ],
+  tacticalSpots: [
+    { x: 540, y: 140, watchAngle: -Math.PI * 0.2, label: "long-A", side: "CT" },
+    { x: 620, y: 240, watchAngle: -Math.PI / 2, label: "short-A", side: "both" },
+    { x: 400, y: 240, watchAngle: Math.PI / 2, label: "mid-doors", side: "both" },
+    { x: 200, y: 110, watchAngle: 0.4, label: "B-apps", side: "CT" },
+    { x: 130, y: 130, watchAngle: Math.PI * 0.35, label: "B-site", side: "CT" },
+    { x: 400, y: 400, watchAngle: -Math.PI / 2, label: "T-mid", side: "TR" }
+  ]
 };
 
 const PLAY_MARGIN = 14;

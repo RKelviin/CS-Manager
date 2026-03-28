@@ -89,7 +89,8 @@ export const getTrMovementExecuteSite = (state: MatchState): "site-a" | "site-b"
 const TACTICAL_LOOK_RANGE = 780;
 
 const RETREAT_HP = 34;
-const THREAT_RADIUS = 155;
+/** Exportado para awareness (danger spots) em playerView */
+export const THREAT_RADIUS = 155;
 const ALLY_HELP_RADIUS = 220;
 
 /** Posicao da C4 plantada (ou fallback ao centro do site) */
@@ -448,6 +449,13 @@ const tacticalLookPoints = (bot: Bot, state: MatchState): { x: number; y: number
   const add = (p: { x: number; y: number }) => pts.push(p);
 
   const map = state.mapData;
+  if (map.tacticalSpots?.length) {
+    for (const s of map.tacticalSpots) {
+      if (dist(bot, s) > TACTICAL_LOOK_RANGE) continue;
+      if (!hasLineOfSight(state.mapData, bot, { x: s.x, y: s.y }, TACTICAL_LOOK_RANGE)) continue;
+      add({ x: s.x, y: s.y });
+    }
+  }
   const def = defaultChokes();
   const chokes = map.zones?.some((z) => z.id === "site-a") ? getMapChokePoints(map) : null;
 
@@ -526,6 +534,24 @@ const pickNearestTacticalAimAngle = (bot: Bot, state: MatchState, tickId: number
   const moveAng = Math.atan2(bot.targetY - bot.y, bot.targetX - bot.x);
   let bestA = moveAng;
   let best = Infinity;
+
+  for (const s of state.mapData.tacticalSpots ?? []) {
+    if (dist(bot, s) > TACTICAL_LOOK_RANGE) continue;
+    const probe = {
+      x: bot.x + Math.cos(s.watchAngle) * 95,
+      y: bot.y + Math.sin(s.watchAngle) * 95
+    };
+    if (!hasLineOfSight(state.mapData, bot, probe, TACTICAL_LOOK_RANGE)) continue;
+    const ang = s.watchAngle;
+    let score: number =
+      preferredAngle != null ? angleDiff(ang, preferredAngle) : angleDiff(ang, moveAng) * 0.92;
+    score *= 0.78;
+    score += (botSlotIndex(bot) * 0.009 + (tickId % 13) * 0.006) % 0.12;
+    if (score < best) {
+      best = score;
+      bestA = ang;
+    }
+  }
 
   for (const p of points) {
     if (dist(bot, p) < 12) continue;
@@ -806,8 +832,16 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
       const offsets = TR_FORMATION_OFFSETS[roleKey] ?? TR_FORMATION_OFFSETS.Support;
       const toSite = Math.atan2(site.y - carrier.y, site.x - carrier.x);
       const perp = toSite + Math.PI / 2;
-      const fx = Math.cos(toSite) * offsets.forward + Math.cos(perp) * offsets.lateral;
-      const fy = Math.sin(toSite) * offsets.forward + Math.sin(perp) * offsets.lateral;
+      let fx = Math.cos(toSite) * offsets.forward + Math.cos(perp) * offsets.lateral;
+      let fy = Math.sin(toSite) * offsets.forward + Math.sin(perp) * offsets.lateral;
+      const execSiteId = getTrMovementExecuteSite(state);
+      const execC = getSiteCenters(state.mapData)[execSiteId];
+      const dangerNearExec =
+        view?.dangerSpots?.some((d) => Math.hypot(d.x - execC.x, d.y - execC.y) < 190) ?? false;
+      if (dangerNearExec) {
+        fx *= 0.9;
+        fy *= 0.9;
+      }
       bot.targetX = carrier.x + fx;
       bot.targetY = carrier.y + fy;
       const c = clampToMap(state.mapData, bot.targetX, bot.targetY);
@@ -852,7 +886,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     return;
   }
 
-  // 5a) CT em defesa (pre-plant): patrulha entre posições de cobertura no site atribuído
+  // 5a) CT em defesa (pre-plant): patrulha — priorizar dangerSpots (ângulos cegos)
   if (
     bot.team === getCtTeamFromState(state) &&
     isCtDefendStrategy(state.bluStrategy) &&
@@ -860,6 +894,12 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     bot.hp > RETREAT_HP &&
     !shouldSaveEquipment(bot, state)
   ) {
+    if (view?.dangerSpots && view.dangerSpots.length > 0 && !threat) {
+      const nearest = view.dangerSpots.reduce((a, b) => (dist(bot, a) < dist(bot, b) ? a : b));
+      bot.targetX = nearest.x;
+      bot.targetY = nearest.y;
+      return;
+    }
     const patrol = getCtHoldPatrolPositions(bot, state);
     const tick = state.tickId ?? 0;
     const slot = botSlotIndex(bot);
@@ -1011,7 +1051,7 @@ export const computeDesiredAimAngle = (
     return pickNearestTacticalAimAngle(bot, state, tickId, preferRetake);
   }
 
-  /** Idle: angulos taticos (objetivos, rotas, destino de movimento) — sem snap ao inimigo invisivel */
+  /** Idle: pickNearestTacticalAimAngle prioriza watchAngle de tacticalSpots */
   return pickNearestTacticalAimAngle(bot, state, tickId, null);
 };
 

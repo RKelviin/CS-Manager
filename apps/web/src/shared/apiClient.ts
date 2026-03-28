@@ -104,6 +104,23 @@ export type ApiGlobalRankingResponse = {
   total: number;
 };
 
+export type ApiTeamRatingHistoryItem = {
+  matchId: string;
+  opponentName: string;
+  result: "win" | "draw" | "loss";
+  ratingBefore: number;
+  ratingAfter: number;
+  ratingDelta: number;
+  createdAt: string;
+};
+
+export type ApiTeamRatingHistoryResponse = {
+  teamId: string;
+  teamName: string;
+  currentRating: number;
+  history: ApiTeamRatingHistoryItem[];
+};
+
 export type ApiPlayerRankingItem = {
   playerId: string;
   playerName: string;
@@ -143,7 +160,9 @@ export const simulationApi = {
 
 export const rankingApi = {
   getGlobal: (limit = 100, offset = 0) =>
-    api.get<ApiGlobalRankingResponse>(`ranking/global?limit=${limit}&offset=${offset}`)
+    api.get<ApiGlobalRankingResponse>(`ranking/global?limit=${limit}&offset=${offset}`),
+  getTeamHistory: (teamId: string) =>
+    api.get<ApiTeamRatingHistoryResponse>(`ranking/teams/${teamId}/history`)
 };
 
 export type ChampionshipTemplate = {

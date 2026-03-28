@@ -215,7 +215,7 @@ export async function getTeamRatingHistory(teamId: string): Promise<{
   });
 
   const history: TeamRatingHistoryItem[] = records.map((r) => {
-    const opponent = r.opponentId === r.match.teamAId ? r.match.teamB : r.match.teamA;
+    const opponent = r.opponentId === r.match.teamAId ? r.match.teamA : r.match.teamB;
     const result: "win" | "draw" | "loss" =
       r.result === 1 ? "win" : r.result === 0.5 ? "draw" : "loss";
     return {

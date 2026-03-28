@@ -1,4 +1,5 @@
 import { prisma } from "../../db/index.js";
+import { settleBets } from "../betting/betting.service.js";
 import { applyRatingFromMatch, getPositionsForTeams, getRankingPreview } from "../ranking/rating.service.js";
 
 const SYSTEM_USER_EMAIL = "system@csm.league";
@@ -227,6 +228,8 @@ export async function persistMatchResult(matchId: string, body: PersistMatchBody
         }
       }
     }
+
+    await settleBets(matchId, winnerId ?? null, tx);
   });
 
   if (playerStats && playerStats.length > 0) {

@@ -3,14 +3,22 @@
  */
 export const BusinessErrorCode = {
   INSUFFICIENT_BALANCE: "INSUFFICIENT_BALANCE",
-  TEAM_FULL: "TEAM_FULL"
+  TEAM_FULL: "TEAM_FULL",
+  BET_AMOUNT_OUT_OF_RANGE: "BET_AMOUNT_OUT_OF_RANGE",
+  BET_MATCH_NOT_PENDING: "BET_MATCH_NOT_PENDING",
+  BET_ALREADY_PLACED: "BET_ALREADY_PLACED",
+  BET_INVALID_TEAM: "BET_INVALID_TEAM"
 } as const;
 
 export type BusinessErrorCodeType = (typeof BusinessErrorCode)[keyof typeof BusinessErrorCode];
 
 const defaultBusinessMessages: Record<BusinessErrorCodeType, string> = {
   [BusinessErrorCode.INSUFFICIENT_BALANCE]: "Insufficient balance",
-  [BusinessErrorCode.TEAM_FULL]: "Team roster is full"
+  [BusinessErrorCode.TEAM_FULL]: "Team roster is full",
+  [BusinessErrorCode.BET_AMOUNT_OUT_OF_RANGE]: "O valor da aposta deve ser entre $100 e $10.000.",
+  [BusinessErrorCode.BET_MATCH_NOT_PENDING]: "Esta partida não está disponível para apostas.",
+  [BusinessErrorCode.BET_ALREADY_PLACED]: "Você já apostou nesta partida.",
+  [BusinessErrorCode.BET_INVALID_TEAM]: "O time apostado não participa desta partida."
 };
 
 export class BusinessError extends Error {
@@ -39,6 +47,10 @@ export function toUserFriendlyError(err: unknown): string {
   if (isBusinessError(err)) {
     if (err.code === BusinessErrorCode.INSUFFICIENT_BALANCE) return "Saldo insuficiente.";
     if (err.code === BusinessErrorCode.TEAM_FULL) return "O elenco do time está cheio.";
+    if (err.code === BusinessErrorCode.BET_AMOUNT_OUT_OF_RANGE) return "O valor da aposta deve ser entre $100 e $10.000.";
+    if (err.code === BusinessErrorCode.BET_MATCH_NOT_PENDING) return "Esta partida não está disponível para apostas.";
+    if (err.code === BusinessErrorCode.BET_ALREADY_PLACED) return "Você já apostou nesta partida.";
+    if (err.code === BusinessErrorCode.BET_INVALID_TEAM) return "O time apostado não participa desta partida.";
   }
 
   const msg = err instanceof Error ? err.message : String(err);

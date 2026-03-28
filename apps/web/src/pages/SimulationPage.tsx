@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from "react";
 import { useAuth } from "../features/auth";
 import { useUserTeam } from "../features/team";
 import { useMatch, useMatchContext, matchRegistry, type MatchSetup, type MatchState } from "../features/replay";
@@ -21,6 +21,7 @@ import {
   TeamPanel
 } from "../features/replay/ui";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { BettingPanel } from "../features/betting/BettingPanel";
 
 const { colors, radii, typography } = theme;
 
@@ -60,6 +61,8 @@ export const SimulationPage = () => {
   const [mapId, setMapId] = useState("dust2");
   const [maps, setMaps] = useState<MapInfo[]>(() => getBuiltinMaps());
   const [mapData, setMapData] = useState<import("../features/replay/map/mapTypes").MapData | null>(null);
+  /** Registry id da simulação exibida para o leagueMatch atual (não o watchedMatchId global). */
+  const [leagueSimulationMatchId, setLeagueSimulationMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     getAllMaps().then((list) => setMaps(list.length > 0 ? list : getBuiltinMaps()));
@@ -133,6 +136,18 @@ export const SimulationPage = () => {
     }),
     [baseSetup, effectiveMapData]
   );
+
+  const registryBettingState = useSyncExternalStore(
+    (onStoreChange) => {
+      if (!leagueSimulationMatchId) return () => {};
+      return matchRegistry.subscribe(leagueSimulationMatchId, () => onStoreChange());
+    },
+    () => (leagueSimulationMatchId ? matchRegistry.getMatch(leagueSimulationMatchId) : null),
+    () => null
+  );
+  const bettingDisabled =
+    registryBettingState != null &&
+    (registryBettingState.isRunning || registryBettingState.matchWinner != null);
 
   if (loading) {
     return (
@@ -210,6 +225,16 @@ export const SimulationPage = () => {
           </select>
         </label>
       </div>
+      {leagueMatch && !loading && (
+        <BettingPanel
+          matchId={leagueMatch.id}
+          teamAId={leagueMatch.teamAId}
+          teamAName={leagueMatch.teamA.name}
+          teamBId={leagueMatch.teamBId}
+          teamBName={leagueMatch.teamB.name}
+          disabled={bettingDisabled}
+        />
+      )}
       {!mapReady ? (
         <p style={{ color: "#94a3b8" }}>Carregando mapa...</p>
       ) : (
@@ -220,6 +245,7 @@ export const SimulationPage = () => {
         leagueMatch={leagueMatch}
         user={user}
         userTeamId={teamId ?? undefined}
+        onLeagueSimulationMatchIdChange={setLeagueSimulationMatchId}
         onLeagueMatchChange={setLeagueMatch}
         onMatchPersisted={() => {
           refreshTeam();
@@ -241,12 +267,15 @@ export function SimulationView({
   onMatchPersisted,
   onBackToChampionship,
   matchId: matchIdProp,
-  onRegistryMatchReplaced
+  onRegistryMatchReplaced,
+  onLeagueSimulationMatchIdChange
 }: {
   setup: MatchSetup;
   leagueMatch: ApiMatch | null;
   user: { id: string } | null;
   userTeamId?: string;
+  /** Id no registry da partida que este view usa em `useMatch` (alinhado ao setup / leagueMatch exibido). */
+  onLeagueSimulationMatchIdChange?: (registryMatchId: string | null) => void;
   onLeagueMatchChange: (m: ApiMatch | null) => void;
   onMatchPersisted?: () => void;
   /** Quando em partida de campeonato: callback para voltar à lista do campeonato */
@@ -264,6 +293,16 @@ export function SimulationView({
   const watchedId = matchContext?.watchedMatchId ?? null;
   const liveId = pickLiveMatchId(matchIdProp, watchedId, createdMatchId);
   const matchId = liveId;
+
+  useEffect(() => {
+    onLeagueSimulationMatchIdChange?.(liveId);
+  }, [liveId, onLeagueSimulationMatchIdChange]);
+
+  useEffect(() => {
+    return () => {
+      onLeagueSimulationMatchIdChange?.(null);
+    };
+  }, [onLeagueSimulationMatchIdChange]);
 
   /**
    * Mantém uma partida no registry alinhada ao setup (mapa/times).

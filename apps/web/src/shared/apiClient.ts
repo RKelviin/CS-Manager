@@ -189,3 +189,27 @@ export const championshipApi = {
   getRun: (id: string) => api.get<ChampionshipRun & { template?: ChampionshipTemplate }>(`championships/runs/${id}`),
   start: (format: 2 | 4 | 8) => api.post<{ id: string; name: string; matches: ApiMatch[] }>("championships/start", { format })
 };
+
+export type ApiBet = {
+  id: string;
+  userId: string;
+  matchId: string;
+  teamId: string;
+  amount: number;
+  status: string;
+  payout: number | null;
+  createdAt: string;
+  match?: ApiMatch;
+};
+
+export type ApiMatchOdds = {
+  teamA: { teamId: string; teamName: string; impliedProbability: number; odds: number };
+  teamB: { teamId: string; teamName: string; impliedProbability: number; odds: number };
+};
+
+export const bettingApi = {
+  placeBet: (matchId: string, teamId: string, amount: number) =>
+    api.post<ApiBet>("betting/bets", { matchId, teamId, amount }),
+  getUserBets: () => api.get<ApiBet[]>("betting/bets"),
+  getMatchOdds: (matchId: string) => api.get<ApiMatchOdds>(`betting/matches/${matchId}/odds`)
+};

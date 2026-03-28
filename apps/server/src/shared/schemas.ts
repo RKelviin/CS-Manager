@@ -73,3 +73,13 @@ export const marketPurchaseBodySchema = z.object({
 export const marketBoosterBodySchema = z.object({
   teamId: cuidParam
 });
+
+export const placeBetBodySchema = z.object({
+  matchId: cuidParam,
+  teamId: cuidParam,
+  amount: z.number().int().min(100).max(10000)
+});
+
+export const matchIdParamsSchema = z.object({
+  matchId: cuidParam
+});

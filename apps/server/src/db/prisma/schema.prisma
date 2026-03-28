@@ -17,6 +17,7 @@ model User {
   updatedAt     DateTime @updatedAt
   teams         Team[]
   seasons       Season[]
+  bets          Bet[]
 }
 
 model Team {
@@ -115,6 +116,7 @@ model Match {
 
   playerStats     MatchPlayerStat[]
   ratingHistory   TeamRatingHistory[]
+  bets            Bet[]
 
   @@index([seasonId])
   @@index([status])
@@ -151,4 +153,22 @@ model MatchPlayerStat {
   @@unique([matchId, playerId])
   @@index([matchId])
   @@index([playerId])
+}
+
+model Bet {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  teamId    String
+  amount    Int
+  status    String
+  payout    Int?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, matchId])
+  @@index([userId])
+  @@index([matchId])
+  @@index([status])
 }

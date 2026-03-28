@@ -15,7 +15,7 @@
 
 ## Mapas disponíveis
 
-- **Built-in:** Dust2, Inferno (`mapRegistry.ts`)
+- **Built-in:** Dust2, Inferno, Mirage (`mapRegistry.ts`)
 - **Customizados:** exportados via editor (`.map.json` em `map/`)
 
 ## Regras

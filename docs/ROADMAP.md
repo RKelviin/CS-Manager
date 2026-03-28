@@ -39,7 +39,7 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 - **Drops de arma:** primária no chão à morte (exceto pistola), pickup por qualquer time com upgrade por tier, ícone no mapa com rotação da mira do morto
 - **Partidas ao vivo:** lista de partidas em andamento no registry, ordenação por média de rating global; destaque automático do “melhor” confronto; vista espetador (placar + times + mapa)
 - Regulamento: 7 rounds, OT (MR6), troca de lados no round 7
-- Mapas: Dust2, Inferno, editor, customizados via API
+- Mapas: Dust2, Inferno, Mirage, editor, customizados via API
 
 ### Dashboard e Ranking
 - Histórico de partidas
@@ -150,7 +150,7 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 
 ---
 
-### Fase 4 — Engine: Evolução da Jogabilidade (Novos Mapas e Estratégias)
+### Fase 4 — Engine: Evolução da Jogabilidade (Novos Mapas e Estratégias) ✅ concluída
 - Adicionar 1 novo mapa built-in (ex: Nuke ou Ancient) seguindo o padrão de `inferno.ts` / `inferno.map.json`, registrando em `mapRegistry.ts`
 - Implementar estratégia TR `fake` em `trStrategy.ts` e CT `rotate` em `ctStrategy.ts`
 - Adicionar atributo `morale` (0–100) em `createMatchState.ts`: afeta `composure` após loss streak ≥ 3

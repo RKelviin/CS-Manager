@@ -54,11 +54,22 @@ export function chooseRedStrategyForRound(state: MatchState, trBots: Bot[]): Red
       if (state.redStrategy === pick && Math.random() < 0.3) return pick === "split" ? "slow" : "split";
       return pick;
     }
-    const picks: RedStrategy[] = ["rush", "split", "slow"];
-    const idx = Math.floor(Math.random() * 3);
-    let pick = picks[idx];
+    const strats: RedStrategy[] = ["rush", "split", "slow", "fake"];
+    const fakeWeight = Math.max(0, ((decision - 50) / 50) * 0.85);
+    const weights = [1, 1, 1, fakeWeight];
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    let pick = strats[0]!;
+    for (let i = 0; i < strats.length; i++) {
+      r -= weights[i]!;
+      if (r <= 0) {
+        pick = strats[i]!;
+        break;
+      }
+    }
     if (state.redStrategy === pick && Math.random() < 0.3) {
-      pick = picks[(idx + 1) % 3];
+      const altPool = strats.filter((s) => s !== pick);
+      pick = altPool[Math.floor(Math.random() * altPool.length)]!;
     }
     return pick;
   }

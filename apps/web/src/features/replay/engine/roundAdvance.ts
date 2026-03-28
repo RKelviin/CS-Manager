@@ -23,9 +23,29 @@ import {
 } from "./matchConstants";
 import { clamp, pushLog } from "./matchUtils";
 import { weaponKind } from "../ui/weaponIcons";
-import type { Bot, MatchState } from "../types";
+import type { Bot, MatchState, TeamSide } from "../types";
 
 const BLU_KIT_SLOTS_FULL_BUY = 99;
+
+/** Moral: após vencedor e loss streak (resolveRound), antes do avanço de round. */
+export function applyMoraleAfterRound(state: MatchState, winner: TeamSide) {
+  if (!state.morale) {
+    state.morale = { RED: 100, BLU: 100 };
+  }
+  const before = { RED: state.morale.RED, BLU: state.morale.BLU };
+  const loser: TeamSide = winner === "RED" ? "BLU" : "RED";
+
+  if (state.lossStreak[loser] >= 3) {
+    state.morale[loser] = Math.max(0, state.morale[loser] - 5 * (state.lossStreak[loser] - 2));
+  }
+  state.morale[winner] = Math.min(100, state.morale[winner] + 8);
+
+  for (const side of ["RED", "BLU"] as const) {
+    if (state.morale[side] < 50 && before[side] >= 50) {
+      pushLog(state, `${side} moral baixa (${state.morale[side]}) — composure penalizada`);
+    }
+  }
+}
 
 export const snapshotBotsForAdvance = (bots: Bot[]): Bot[] =>
   bots.map((b) => ({
@@ -224,8 +244,6 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
 
   const trBots = state.bots.filter((b) => b.team === getTrTeamFromState(state));
   const ctBots = purchaseBots.filter((b) => b.team === getCtTeamFromState(state));
-  state.redStrategy = chooseRedStrategyForRound(state, trBots);
-  state.bluStrategy = chooseBluStrategyForRound(state, ctBots);
   state.bombDroppedAt = fresh.bombDroppedAt;
   state.defuseKitDrops = [];
   state.weaponDrops = [];
@@ -237,6 +255,8 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
   state.plantProgressMs = fresh.plantProgressMs;
   state.defuseProgressMs = fresh.defuseProgressMs;
   state.defuserId = fresh.defuserId;
+  state.redStrategy = chooseRedStrategyForRound(state, trBots);
+  state.bluStrategy = chooseBluStrategyForRound(state, ctBots);
   pushLog(
     state,
     `Proximo round ${state.round}: ${state.round % 2 === 1 ? "RED-1" : "BLU-1"} inicia · RED ${state.redStrategy} | BLU ${state.bluStrategy} · exec T site ${fresh.tsExecuteSite === "site-a" ? "A" : "B"}`

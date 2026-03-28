@@ -33,6 +33,18 @@ export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): Blu
 
   if (ctBots.length === 0) return "default";
 
+  const aliveCts = ctBots.filter((b) => b.hp > 0);
+  if (state.bombPlanted && state.bombPlantSite) {
+    const rifles = aliveCts.filter((b) => weaponKind(b.primaryWeapon) !== "pistol").length >= 3;
+    if (rifles) {
+      const lateRotate =
+        state.bombPlantSite !== tsExecuteSite || state.redStrategy === "fake";
+      if (aliveCts.length >= 3 && lateRotate) return "rotate";
+      return "retake";
+    }
+    return "retake";
+  }
+
   const igl = ctBots.find((b) => b.displayRole === "IGL" || b.role === "IGL");
   const decision = igl?.decision ?? 75;
 
@@ -76,10 +88,15 @@ export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): Blu
 export function getCtSiteForBot(
   slot: number,
   strategy: BluStrategy,
-  tsExecuteSite: "site-a" | "site-b"
+  tsExecuteSite: "site-a" | "site-b",
+  bombPlantSite: "site-a" | "site-b" | null = null
 ): "site-a" | "site-b" {
   if (strategy === "stack-a") return "site-a";
   if (strategy === "stack-b") return "site-b";
+  if (strategy === "rotate") {
+    const planted = bombPlantSite ?? tsExecuteSite;
+    return slot < 2 ? planted : planted === "site-a" ? "site-b" : "site-a";
+  }
   if (strategy === "default" || strategy === "hold") {
     return slot < 3 ? tsExecuteSite : (tsExecuteSite === "site-a" ? "site-b" : "site-a");
   }
@@ -88,5 +105,11 @@ export function getCtSiteForBot(
 
 /** CT em estratégia de defesa (não aggressive/retake) — vai ao site atribuído */
 export function isCtDefendStrategy(strategy: BluStrategy): boolean {
-  return strategy === "default" || strategy === "stack-a" || strategy === "stack-b" || strategy === "hold";
+  return (
+    strategy === "default" ||
+    strategy === "stack-a" ||
+    strategy === "stack-b" ||
+    strategy === "hold" ||
+    strategy === "rotate"
+  );
 }

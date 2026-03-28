@@ -40,7 +40,7 @@ export function getCtHoldPosition(bot: Bot, state: MatchState): TacticalPoint {
   const map = state.mapData as MapData | undefined;
   const centers = map ? getSiteCenters(map) : null;
   const slot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
-  const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a");
+  const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
   const siteCenter = centers ? centers[site] : null;
 
   if (siteCenter) {
@@ -67,7 +67,7 @@ export function getCtHoldPatrolPositions(bot: Bot, state: MatchState): TacticalP
   if (!centers) return [getCtHoldPosition(bot, state)];
 
   const slot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
-  const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a");
+  const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
   const siteCenter = centers[site];
   const offset = (slot - 2) * 35;
 
@@ -179,6 +179,7 @@ export function getWaypointPoolForRole(
         if (role === "Lurker") return pool.filter((p) => Math.abs(p.x - 400) > 120);
         return pool;
       case "retake":
+      case "rotate":
         if (role === "AWP" || role === "Sniper") return pool.filter((p) => p.y <= 250);
         return pool;
       case "hold":

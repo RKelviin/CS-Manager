@@ -12,8 +12,8 @@ const DEFAULT_BLU_NAMES = ["BLU-1", "BLU-2", "BLU-3", "BLU-4", "BLU-5"];
 const TR_PISTOL = "Glock-18";
 const CT_PISTOL = "USP-S";
 
-const RED_STRATS: RedStrategy[] = ["rush", "split", "slow", "default"];
-const BLU_STRATS: BluStrategy[] = ["default", "stack-a", "stack-b", "aggressive"];
+const RED_STRATS: RedStrategy[] = ["rush", "split", "slow", "default", "fake"];
+const BLU_STRATS: BluStrategy[] = ["default", "stack-a", "stack-b", "aggressive", "rotate"];
 
 const pickStrategy = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -265,6 +265,10 @@ export const createMatchState = (
     bluStrategy,
     score: fullReset || !(init && "score" in init) ? { RED: 0, BLU: 0 } : { ...(init as MatchState).score },
     lossStreak: fullReset || !(init && "lossStreak" in init) ? { RED: 0, BLU: 0 } : { ...(init as MatchState).lossStreak },
+    morale:
+      fullReset || !(init && "morale" in init && "bots" in init)
+        ? { RED: 100, BLU: 100 }
+        : { ...(init as MatchState).morale },
     matchType,
     otPeriodScore: fullReset ? undefined : (init && "otPeriodScore" in init ? { ...(init as MatchState).otPeriodScore! } : undefined),
     bots: ensureFreshStats(createBots(setup, map, round)),

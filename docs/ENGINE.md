@@ -70,14 +70,15 @@ O replay 2D simula partidas em tempo real via **matchReducer** (`apps/web/src/fe
 | **reflex**    | Ordem de decisão, rotação da mira |
 | **decision**  | Prioridade de alvo (C4, IGL)      |
 | **composure** | Reduz penalty em HP baixo         |
+| **morale** (time, 0–100) | Reduz composure efetivo após loss streak ≥ 3 |
 
 
 ---
 
 ## Estratégias e roles
 
-**CT:** default (3-2), stack-a, stack-b, aggressive, hold, retake (pós-plant)
+**CT:** default (3-2), stack-a, stack-b, aggressive, hold, retake (pós-plant), rotate (pós-plant / rotação tardia)
 
-**TR:** rush, split, slow, default
+**TR:** rush, split, slow, default, fake (finta de site nos primeiros ~40% do round)
 
 **Roles:** IGL, Rifler, AWP, Entry, Sniper, Support, Lurker

@@ -59,6 +59,14 @@ describe("getCtSiteForBot", () => {
     expect(getCtSiteForBot(0, "default", "site-b")).toBe("site-b");
     expect(getCtSiteForBot(3, "default", "site-b")).toBe("site-a");
   });
+
+  it("rotate: slots 0–1 no site plantado, demais no outro", () => {
+    expect(getCtSiteForBot(0, "rotate", "site-a", "site-b")).toBe("site-b");
+    expect(getCtSiteForBot(1, "rotate", "site-a", "site-b")).toBe("site-b");
+    expect(getCtSiteForBot(2, "rotate", "site-a", "site-b")).toBe("site-a");
+    expect(getCtSiteForBot(3, "rotate", "site-a", "site-b")).toBe("site-a");
+    expect(getCtSiteForBot(4, "rotate", "site-a", "site-b")).toBe("site-a");
+  });
 });
 
 describe("isCtDefendStrategy", () => {
@@ -72,6 +80,10 @@ describe("isCtDefendStrategy", () => {
   it("retorna false para aggressive e retake", () => {
     expect(isCtDefendStrategy("aggressive")).toBe(false);
     expect(isCtDefendStrategy("retake")).toBe(false);
+  });
+
+  it("rotate é estratégia de defesa (posicionamento por site)", () => {
+    expect(isCtDefendStrategy("rotate")).toBe(true);
   });
 });
 

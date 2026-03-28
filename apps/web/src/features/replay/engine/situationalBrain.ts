@@ -1,7 +1,7 @@
 /**
  * Decisao situacional: prioridades de mira, intencao de movimento e escolha de alvo no combate.
  */
-import { lineIntersectsWall } from "../map/dust2Map";
+import { botInSite, lineIntersectsWall } from "../map/dust2Map";
 import { getSiteCenters, type MapData } from "../map/mapTypes";
 import { WEAPON_FOV, WEAPON_RANGE } from "./combatConstants";
 import { getWeaponFovForRole, getWeaponRangeForRole, threatToCarrierScore } from "./roleCombat";
@@ -32,6 +32,59 @@ export const FOOTSTEP_MEMORY_TICKS = 22;
 /** Distancia maxima para ouvir passos (menor que tiros) */
 export const HEAR_FOOTSTEP_RANGE = 200;
 const MAP_MARGIN = 14;
+const TR_ROUND_MS = 115000;
+
+/**
+ * Fake: se TR já domina um bombsite (sem CT na zona e força mínima), planta/movimento nesse site
+ * em vez de seguir para o outro.
+ */
+function getTrDominatedBombsite(state: MatchState): "site-a" | "site-b" | null {
+  if (state.redStrategy !== "fake" || state.bombPlanted) return null;
+  const map = state.mapData;
+  const trSide = getTrTeamFromState(state);
+  const ctSide = getCtTeamFromState(state);
+  const siteCounts = (site: "site-a" | "site-b") => {
+    let tr = 0;
+    let ct = 0;
+    for (const b of state.bots) {
+      if (b.hp <= 0 || !botInSite(map, b, site)) continue;
+      if (b.team === trSide) tr++;
+      else if (b.team === ctSide) ct++;
+    }
+    return { tr, ct };
+  };
+  const dominates = (site: "site-a" | "site-b") => {
+    const { tr, ct } = siteCounts(site);
+    if (ct > 0) return false;
+    const carrier = state.bots.find((b) => b.team === trSide && b.hasBomb && b.hp > 0);
+    const carrierIn = Boolean(carrier && botInSite(map, carrier, site));
+    return tr >= 2 || (tr >= 1 && carrierIn);
+  };
+  const aOk = dominates("site-a");
+  const bOk = dominates("site-b");
+  if (!aOk && !bOk) return null;
+  const carrier = state.bots.find((b) => b.team === trSide && b.hasBomb && b.hp > 0);
+  if (carrier) {
+    if (aOk && botInSite(map, carrier, "site-a")) return "site-a";
+    if (bOk && botInSite(map, carrier, "site-b")) return "site-b";
+  }
+  const real = state.tsExecuteSite ?? "site-a";
+  const feint = real === "site-a" ? "site-b" : "site-a";
+  if (dominates(feint)) return feint;
+  if (dominates(real)) return real;
+  return aOk ? "site-a" : "site-b";
+}
+
+/** Site alvo de movimento TR (fake: finta no começo; se dominar um site, commit para plantar nele). */
+export const getTrMovementExecuteSite = (state: MatchState): "site-a" | "site-b" => {
+  const real = state.tsExecuteSite ?? "site-a";
+  if (state.redStrategy === "fake" && !state.bombPlanted) {
+    const dominated = getTrDominatedBombsite(state);
+    if (dominated != null) return dominated;
+    if (state.timeLeftMs > TR_ROUND_MS * 0.6) return real === "site-a" ? "site-b" : "site-a";
+  }
+  return real;
+};
 /** Alcance para validar LOS ate um ponto de mira tatica (maior que arma — so angulo) */
 const TACTICAL_LOOK_RANGE = 780;
 
@@ -162,7 +215,7 @@ export const computeGunfireMovementTarget = (
 
   if (bot.team === getTrTeamFromState(state)) {
     towardT += 0.06;
-    const site = getSiteCenters(state.mapData)[state.tsExecuteSite ?? "site-a"];
+    const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
     /** TR: ao ouvir tiros, avancar em direcao ao site (dominar bombsite) mesmo ao rotacionar */
     const execBlend = bot.role === "IGL" ? 0.22 : 0.16;
     const rawX = bot.x + (primary.x - bot.x) * towardT;
@@ -173,7 +226,20 @@ export const computeGunfireMovementTarget = (
   }
 
   const slot = botSlotIndex(bot);
-  const anchorSite = getSiteCenters(state.mapData)[getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a")];
+  const anchorSite = getSiteCenters(state.mapData)[
+    getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite)
+  ];
+
+  if ((state.bluStrategy === "retake" || state.bluStrategy === "rotate") && state.bombPlantSite) {
+    const plantP = getPlantedBombWorldPos(state)!;
+    /** AWP em retake: não rushar — manter distância para pegar frags nos ângulos */
+    const t = bot.role === "AWP" ? Math.min(0.28, towardT) : Math.min(0.52, towardT + 0.04);
+    const rawX = bot.x + (primary.x - bot.x) * t;
+    const rawY = bot.y + (primary.y - bot.y) * t;
+    const gx = rawX * 0.55 + plantP.x * 0.45;
+    const gy = rawY * 0.55 + plantP.y * 0.45;
+    return applyLurkerFlank(gx, gy);
+  }
 
   if (isCtDefendStrategy(state.bluStrategy)) {
     /** AWP em hold: manter mais distância, segurar ângulo */
@@ -190,17 +256,6 @@ export const computeGunfireMovementTarget = (
     const rawX = bot.x + (primary.x - bot.x) * Math.min(0.58, t);
     const rawY = bot.y + (primary.y - bot.y) * Math.min(0.58, t);
     return applyLurkerFlank(rawX, rawY);
-  }
-
-  if (state.bluStrategy === "retake" && state.bombPlantSite) {
-    const plantP = getPlantedBombWorldPos(state)!;
-    /** AWP em retake: não rushar — manter distância para pegar frags nos ângulos */
-    const t = bot.role === "AWP" ? Math.min(0.28, towardT) : Math.min(0.52, towardT + 0.04);
-    const rawX = bot.x + (primary.x - bot.x) * t;
-    const rawY = bot.y + (primary.y - bot.y) * t;
-    const gx = rawX * 0.55 + plantP.x * 0.45;
-    const gy = rawY * 0.55 + plantP.y * 0.45;
-    return applyLurkerFlank(gx, gy);
   }
 
   const blend = 0.22;
@@ -326,7 +381,7 @@ const ctPostPlantMode = (
     if (slot === 0 || slot === 1) return "defuse";
     return "hunt";
   }
-  if (strat === "retake") {
+  if (strat === "retake" || strat === "rotate") {
     if (trsAdvantage) return slot % 3 === 0 ? "hunt" : "defuse";
     return slot % 3 === 0 ? "hunt" : "defuse";
   }
@@ -737,7 +792,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
   if (bot.team === getTrTeamFromState(state) && !bot.hasBomb && bot.hp > 0 && !state.bombPlanted && !state.bombDroppedAt) {
     const carrier = state.bots.find((b) => b.team === getTrTeamFromState(state) && b.hasBomb && b.hp > 0);
     if (carrier) {
-      const site = getSiteCenters(state.mapData)[state.tsExecuteSite ?? "site-a"];
+      const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
       const isSecondHalf = state.round >= FIRST_ROUND_SECOND_HALF;
       // TR spawn: first half RED (y~530), second half BLU (y~72)
       const carrierInSpawn =
@@ -761,7 +816,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
       return;
     }
     // Sem portador (ex.: morreu, C4 no chao): ir ao site em vez de ficar parado
-    const site = getSiteCenters(state.mapData)[state.tsExecuteSite ?? "site-a"];
+    const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
     bot.targetX = site.x;
     bot.targetY = site.y;
     return;
@@ -769,7 +824,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
 
   // 4) Portador TR -> executar site alvo do round (dominar bombsite e plantar)
   if (bot.team === getTrTeamFromState(state) && bot.hasBomb) {
-    const site = getSiteCenters(state.mapData)[state.tsExecuteSite ?? "site-a"];
+    const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
     bot.targetX = site.x;
     bot.targetY = site.y;
     return;
@@ -787,7 +842,11 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
   }
 
   // 5) BLU em retake com C4 no chao -> contestar bomba
-  if (bot.team === getCtTeamFromState(state) && state.bluStrategy === "retake" && state.bombDroppedAt) {
+  if (
+    bot.team === getCtTeamFromState(state) &&
+    (state.bluStrategy === "retake" || state.bluStrategy === "rotate") &&
+    state.bombDroppedAt
+  ) {
     bot.targetX = state.bombDroppedAt.x;
     bot.targetY = state.bombDroppedAt.y;
     return;
@@ -835,13 +894,13 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
   /** ~35–5s restantes: TRs convergem ao site para dominar e plantar juntos; ultimos 5s nao forcar */
   if (state.timeLeftMs < 35000 && !state.bombPlanted && state.timeLeftMs > 5000) {
     if (bot.team === getTrTeamFromState(state) && bot.hp > RETREAT_HP) {
-      const site = getSiteCenters(state.mapData)[state.tsExecuteSite ?? "site-a"];
+      const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
       bot.targetX = site.x;
       bot.targetY = site.y;
     }
     if (bot.team === getCtTeamFromState(state) && isCtDefendStrategy(state.bluStrategy)) {
       const slot = botSlotIndex(bot);
-      const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a");
+      const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
       const anchor = getSiteCenters(state.mapData)[site];
       bot.targetX = anchor.x;
       bot.targetY = anchor.y;
@@ -1009,9 +1068,13 @@ export const pickCombatVictim = (attacker: Bot, inSight: Bot[], state: MatchStat
 };
 
 /** Modificador de chance de acerto: panico com pouca vida (escala por composure: alto composure = menos penalidade) */
-export const panicPenalty = (bot: Bot): number => {
+export const panicPenalty = (bot: Bot, state?: MatchState): number => {
   if (bot.hp >= 40) return 0;
-  const comp = bot.composure ?? 75;
+  let comp = bot.composure ?? 75;
+  if (state?.morale) {
+    const m = state.morale[bot.team];
+    if (m < 50) comp -= Math.min(20, (50 - m) * 0.4);
+  }
   const basePenalty = 0.2;
   return basePenalty * (1 - comp / 100);
 };

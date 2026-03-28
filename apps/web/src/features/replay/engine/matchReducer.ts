@@ -22,6 +22,7 @@ import {
   DAMAGE_MEMORY_TICKS,
   panicPenalty,
   getPlantedBombWorldPos,
+  getTrMovementExecuteSite,
   pickCombatVictim
 } from "./situationalBrain";
 import { applyPlayerDecision } from "./playerDecision";
@@ -45,9 +46,9 @@ import {
   PLANT_BONUS,
   ROUND_WIN_BONUS
 } from "./economyConstants";
-import { getCtSiteForBot } from "./ctStrategy";
+import { chooseBluStrategyForRound, getCtSiteForBot } from "./ctStrategy";
 import { damageAfterArmor } from "./roundBuy";
-import { applyPendingRoundAdvance, snapshotBotsForAdvance } from "./roundAdvance";
+import { applyMoraleAfterRound, applyPendingRoundAdvance, snapshotBotsForAdvance } from "./roundAdvance";
 import { clamp, pushLog, timeLabel } from "./matchUtils";
 import {
   getCtTeamFromState,
@@ -111,7 +112,7 @@ const filterNav = (pts: { x: number; y: number }[], pred: (p: { x: number; y: nu
 const pickNewTarget = (bot: Bot, state: MatchState) => {
   const isRed = bot.team === "RED";
   const map = mapFor(state);
-  const execSite = state.tsExecuteSite ?? "site-a";
+  const execSite = isRed ? getTrMovementExecuteSite(state) : (state.tsExecuteSite ?? "site-a");
 
   if (isRed) {
     const sitePool = getTrWaypointsToSite(map as import("../map/mapTypes").MapData, execSite);
@@ -187,7 +188,7 @@ const pickNewTarget = (bot: Bot, state: MatchState) => {
   {
     const slot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
     const execSite = state.tsExecuteSite ?? "site-a";
-    const ctSite = getCtSiteForBot(slot, state.bluStrategy, execSite);
+    const ctSite = getCtSiteForBot(slot, state.bluStrategy, execSite, state.bombPlantSite);
 
     switch (state.bluStrategy) {
       case "aggressive":
@@ -217,6 +218,7 @@ const pickNewTarget = (bot: Bot, state: MatchState) => {
         }
         break;
       case "retake":
+      case "rotate":
         pool = filterNav(list, (p) => p.y <= midY + 100);
         break;
       default:
@@ -233,7 +235,7 @@ const pickNewTarget = (bot: Bot, state: MatchState) => {
   const effectivePool = rolePool.length > 0 ? rolePool : pool;
 
   const bluSlot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
-  const ctSite = getCtSiteForBot(bluSlot, state.bluStrategy, execSite);
+  const ctSite = getCtSiteForBot(bluSlot, state.bluStrategy, execSite, state.bombPlantSite);
   const scoreWaypoint = (p: { x: number; y: number }) => {
     let s = 0.5 + Math.random() * 0.5;
     if (centers) {
@@ -560,7 +562,7 @@ const runCombat = (state: MatchState, order: Bot[]) => {
         attacker.aim / 165 +
         getHitChanceBonusForRole(attacker) -
         rangePenalty -
-        panicPenalty(attacker) +
+        panicPenalty(attacker, state) +
         peekerBonus,
       0.39,
       0.945
@@ -654,6 +656,8 @@ const resolveRound = (state: MatchState, winner: TeamSide, cause: string) => {
     state.lossStreak.BLU = 0;
     state.lossStreak.RED = Math.min(state.lossStreak.RED + 1, 5);
   }
+
+  applyMoraleAfterRound(state, winner);
 
   const isOvertime = state.round >= REGULATION_MAX_ROUNDS;
   const isCompetitiveOt = state.matchType === "tournament" && isOvertime;
@@ -833,7 +837,8 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
 
   const trTeam = getTrTeamFromState(state);
   const carrier = state.bots.find((b) => b.team === trTeam && b.hp > 0 && b.hasBomb);
-  if (carrier && botInSite(mapFor(state), carrier, state.tsExecuteSite)) {
+  const trPlantSite = getTrMovementExecuteSite(state);
+  if (carrier && botInSite(mapFor(state), carrier, trPlantSite)) {
     /** Plantando: se vir inimigo, para para atirar (nao pode atirar enquanto planta) */
     const enemies = state.bots.filter((b) => b.team !== carrier.team && b.hp > 0);
     const enemyInSight = enemies.some((e) =>
@@ -843,7 +848,7 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
       state.plantProgressMs += deltaMs;
     if (state.plantProgressMs >= PLANT_TIME_MS) {
       state.bombPlanted = true;
-      state.bombPlantSite = state.tsExecuteSite;
+      state.bombPlantSite = trPlantSite;
       state.bombPlantWorldPos = { x: carrier.x, y: carrier.y };
       state.postPlantTimeLeftMs = POST_PLANT_EXPLODE_MS;
       carrier.hasBomb = false;
@@ -858,7 +863,12 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
       }
       pushLog(
         state,
-        `[${timeLabel(state.timeLeftMs)}] ${carrier.name} plantou a C4 no site ${state.tsExecuteSite === "site-a" ? "A" : "B"}`
+        `[${timeLabel(state.timeLeftMs)}] ${carrier.name} plantou a C4 no site ${trPlantSite === "site-a" ? "A" : "B"}`
+      );
+      const ctTeam = getCtTeamFromState(state);
+      state.bluStrategy = chooseBluStrategyForRound(
+        state,
+        state.bots.filter((b) => b.team === ctTeam)
       );
     }
     } else {
@@ -898,6 +908,7 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
       ...prev,
       score: { ...prev.score },
       lossStreak: { ...prev.lossStreak },
+      morale: prev.morale ? { ...prev.morale } : { RED: 100, BLU: 100 },
       logs: [...prev.logs]
     };
     const winner =
@@ -927,7 +938,8 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
           roundEndBannerMs: 0,
           roundEndBanner: null,
           logs: [...prev.logs],
-          score: { ...prev.score }
+          score: { ...prev.score },
+          morale: prev.morale ? { ...prev.morale } : { RED: 100, BLU: 100 }
         };
         applyPendingRoundAdvance(state);
         return state;
@@ -952,6 +964,7 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
     })),
     score: { ...prev.score },
     lossStreak: { ...prev.lossStreak },
+    morale: prev.morale ? { ...prev.morale } : { RED: 100, BLU: 100 },
     logs: [...prev.logs],
     bombDroppedAt: prev.bombDroppedAt ?? null,
     defuseKitDrops: [...(prev.defuseKitDrops ?? [])],

@@ -52,7 +52,8 @@ const BLU_STRAT_LABELS: Record<string, string> = {
   "stack-b": "Stack B",
   aggressive: "Aggressive",
   hold: "Hold",
-  retake: "Retake"
+  retake: "Retake",
+  rotate: "Rotate"
 };
 
 const strategyLabel = (side: TeamSide, state: MatchState) => {
@@ -71,6 +72,8 @@ export const TeamPanel = ({ state, side }: { state: MatchState; side: TeamSide }
   const isCt = side === getCtTeamFromState(state);
   const sideLabel = isCt ? "CT" : "TR";
   const showSideLabel = state.round >= FIRST_ROUND_SECOND_HALF;
+  const moraleVal = state.morale?.[side] ?? 100;
+  const moraleBarColor = moraleVal >= 70 ? "#22c55e" : moraleVal >= 40 ? "#fbbf24" : "#ef4444";
 
   return (
     <div
@@ -125,6 +128,31 @@ export const TeamPanel = ({ state, side }: { state: MatchState; side: TeamSide }
         }}
       >
         Estrategia: <span style={{ color: "#e2e8f0" }}>{strategyLabel(side, state)}</span>
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          color: "#94a3b8",
+          marginBottom: 10,
+          paddingBottom: 8,
+          borderBottom: "1px solid #2a3142",
+          textTransform: "uppercase",
+          letterSpacing: 0.6
+        }}
+      >
+        <div style={{ marginBottom: 4 }}>
+          Moral: <span style={{ color: "#e2e8f0", fontVariantNumeric: "tabular-nums" }}>{moraleVal}</span>
+        </div>
+        <div
+          style={{
+            height: 6,
+            borderRadius: 3,
+            background: "#1e293b",
+            overflow: "hidden"
+          }}
+        >
+          <div style={{ width: `${moraleVal}%`, height: "100%", background: moraleBarColor, borderRadius: 3 }} />
+        </div>
       </div>
       <div style={{ display: "grid", gap: 8 }}>
         {bots.map((bot) => (

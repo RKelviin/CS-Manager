@@ -4,17 +4,19 @@
  */
 import { DUST2_MAP } from "./dust2Map";
 import { INFERNO_MAP } from "./inferno";
+import { MIRAGE_MAP } from "./mirage";
 import type { MapData } from "./mapTypes";
 
 export type MapInfo = { id: string; name: string };
 
 const BUILTIN_MAPS: Map<string, MapData> = new Map([
   ["dust2", { ...DUST2_MAP } as MapData],
-  ["inferno", { ...INFERNO_MAP } as MapData]
+  ["inferno", { ...INFERNO_MAP } as MapData],
+  ["mirage", { ...MIRAGE_MAP } as MapData]
 ]);
 
 /** Lista de mapas built-in para seleção rápida */
-export const BUILTIN_MAP_IDS = ["dust2", "inferno"] as const;
+export const BUILTIN_MAP_IDS = ["dust2", "inferno", "mirage"] as const;
 
 /** Retorna mapa por id (síncrono, apenas built-in) */
 export function getMapSync(id: string): MapData | null {
@@ -25,7 +27,8 @@ export function getMapSync(id: string): MapData | null {
 export function getBuiltinMaps(): MapInfo[] {
   return [
     { id: "dust2", name: DUST2_MAP.name },
-    { id: "inferno", name: INFERNO_MAP.name }
+    { id: "inferno", name: INFERNO_MAP.name },
+    { id: "mirage", name: MIRAGE_MAP.name }
   ];
 }
 

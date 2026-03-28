@@ -47,9 +47,9 @@ export type PlayerRole = "IGL" | "Rifler" | "AWP";
 /** Colete / colete+cap (reduz dano recebido) */
 export type ArmorLoadout = "none" | "vest" | "vest_helmet";
 
-export type RedStrategy = "rush" | "split" | "slow" | "default";
+export type RedStrategy = "rush" | "split" | "slow" | "default" | "fake";
 /** CT: default=3-2, stack-a/b=todos em um site, aggressive=push, hold=âncoras, retake=pós-plant */
-export type BluStrategy = "default" | "stack-a" | "stack-b" | "aggressive" | "hold" | "retake";
+export type BluStrategy = "default" | "stack-a" | "stack-b" | "aggressive" | "hold" | "retake" | "rotate";
 
 export type Bot = {
   id: string;
@@ -134,6 +134,8 @@ export type MatchState = {
   otPeriodScore?: { RED: number; BLU: number };
   /** Derrotas consecutivas por time (bonus de loss CS-like) */
   lossStreak: { RED: number; BLU: number };
+  /** Moral do time 0–100 (afeta composure efetivo sob pressão) */
+  morale: { RED: number; BLU: number };
   /** tournament = overtime 4 rounds; friendly = sem OT */
   matchType?: MatchType;
   bots: Bot[];

@@ -16,8 +16,8 @@ export type CreatePlayerBody = {
   decision: number;
   composure: number;
   isStarter?: boolean;
-  nationality?: string;
-  avatarUrl?: string;
+  nationality?: string | null;
+  avatarUrl?: string | null;
 };
 
 export type UpdatePlayerBody = Partial<CreatePlayerBody> & {

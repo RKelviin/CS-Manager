@@ -1,19 +1,32 @@
 import { Router, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
+import { getAuthRateLimitMax } from "../../app.js";
 import { signup, login } from "./auth.service.js";
-import type { SignupBody, LoginBody } from "./auth.types.js";
 import { authMiddleware, type AuthRequest } from "../../shared/middleware/authMiddleware.js";
 import { toUserFriendlyError } from "../../shared/errors.js";
 import { prisma } from "../../db/index.js";
+import { loginBodySchema, signupBodySchema } from "../../shared/schemas.js";
+import { parseBody } from "../../shared/validation.js";
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: getAuthRateLimitMax(),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+      code: "RATE_LIMITED"
+    });
+  }
+});
 
 export const authRoutes = Router();
 
-authRoutes.post("/signup", async (req: Request, res: Response) => {
+authRoutes.post("/signup", authRateLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(signupBodySchema, req.body, res);
+  if (!body) return;
   try {
-    const body = req.body as SignupBody;
-    if (!body.email || !body.name || !body.password) {
-      res.status(400).json({ error: "Preencha email, nome e senha." });
-      return;
-    }
     const result = await signup(body);
     res.status(201).json(result);
   } catch (err) {
@@ -23,13 +36,10 @@ authRoutes.post("/signup", async (req: Request, res: Response) => {
   }
 });
 
-authRoutes.post("/login", async (req: Request, res: Response) => {
+authRoutes.post("/login", authRateLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(loginBodySchema, req.body, res);
+  if (!body) return;
   try {
-    const body = req.body as LoginBody;
-    if (!body.email || !body.password) {
-      res.status(400).json({ error: "Preencha email e senha." });
-      return;
-    }
     const result = await login(body);
     res.json(result);
   } catch (err) {

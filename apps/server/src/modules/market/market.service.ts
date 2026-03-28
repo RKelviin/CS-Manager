@@ -1,4 +1,6 @@
 import { prisma } from "../../db/index.js";
+import { BusinessError, BusinessErrorCode } from "../../shared/errors.js";
+import { MAX_PLAYERS_PER_TEAM } from "../../shared/teamLimits.js";
 
 /** Preço fixo do booster pack: 5 jogadores aleatórios */
 export const BOOSTER_PACK_PRICE = 1000;
@@ -23,8 +25,13 @@ export async function purchaseBoosterPack(userId: string, teamId: string) {
   ]);
   if (!user) throw new Error("User not found");
   if (!team) throw new Error("Team not found");
-  if (user.walletBalance < BOOSTER_PACK_PRICE) throw new Error("Insufficient balance");
+  if (user.walletBalance < BOOSTER_PACK_PRICE) {
+    throw new BusinessError(BusinessErrorCode.INSUFFICIENT_BALANCE);
+  }
   if (templates.length < 5) throw new Error("Not enough templates available");
+  if (team.players.length + 5 > MAX_PLAYERS_PER_TEAM) {
+    throw new BusinessError(BusinessErrorCode.TEAM_FULL);
+  }
 
   const selected = pickRandomTemplates(templates, 5);
   const maxOrder = team.players.reduce((max, p) => Math.max(max, p.sortOrder), 0);
@@ -69,7 +76,12 @@ export async function purchaseTemplate(userId: string, templateId: string, teamI
   if (!user) throw new Error("User not found");
   if (!template) throw new Error("Template not found");
   if (!team) throw new Error("Team not found");
-  if (user.walletBalance < template.price) throw new Error("Insufficient balance");
+  if (team.players.length >= MAX_PLAYERS_PER_TEAM) {
+    throw new BusinessError(BusinessErrorCode.TEAM_FULL);
+  }
+  if (user.walletBalance < template.price) {
+    throw new BusinessError(BusinessErrorCode.INSUFFICIENT_BALANCE);
+  }
 
   const maxOrder = team.players.reduce((max, p) => Math.max(max, p.sortOrder), 0);
 

@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { authRoutes } from "./auth/auth.routes.js";
 import { bettingRoutes } from "./betting/betting.routes.js";
 import { championshipRoutes } from "./championship/championship.routes.js";
 import { mapsRoutes } from "./maps/maps.routes.js";
@@ -12,7 +11,6 @@ import { teamRoutes } from "./team/team.routes.js";
 export const registerModuleRoutes = () => {
   const router = Router();
 
-  router.use("/auth", authRoutes);
   router.use("/team", teamRoutes);
   router.use("/market", marketRoutes);
   router.use("/simulation", simulationRoutes);

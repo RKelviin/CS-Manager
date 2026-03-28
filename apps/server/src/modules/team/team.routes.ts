@@ -11,7 +11,16 @@ import {
   removePlayer,
   sellPlayer
 } from "./team.service.js";
-import type { CreateTeamBody, UpdateTeamBody, CreatePlayerBody, UpdatePlayerBody } from "./team.types.js";
+import {
+  createPlayerBodySchema,
+  createTeamBodySchema,
+  teamIdParamsSchema,
+  teamPlayerParamsSchema,
+  updatePlayerBodySchema,
+  updateTeamBodySchema
+} from "../../shared/schemas.js";
+import { businessErrorPayload, isBusinessError } from "../../shared/errors.js";
+import { parseBody, parseParams } from "../../shared/validation.js";
 
 export const teamRoutes = Router();
 
@@ -29,10 +38,11 @@ teamRoutes.get("/", async (req: AuthRequest, res: Response) => {
 });
 
 teamRoutes.get("/:teamId", async (req: AuthRequest, res: Response) => {
+  const p = parseParams(teamIdParamsSchema, req.params, res);
+  if (!p) return;
   try {
-    const teamId = req.params.teamId as string;
     const userId = req.userId!;
-    const team = await findTeamById(teamId, userId);
+    const team = await findTeamById(p.teamId, userId);
     res.json(team);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to get team";
@@ -45,13 +55,10 @@ teamRoutes.get("/:teamId", async (req: AuthRequest, res: Response) => {
 });
 
 teamRoutes.post("/", async (req: AuthRequest, res: Response) => {
+  const body = parseBody(createTeamBodySchema, req.body, res);
+  if (!body) return;
   try {
     const userId = req.userId!;
-    const body = req.body as CreateTeamBody;
-    if (!body.name?.trim()) {
-      res.status(400).json({ error: "name is required" });
-      return;
-    }
     const team = await createTeam(userId, body);
     res.status(201).json(team);
   } catch (err) {
@@ -61,11 +68,13 @@ teamRoutes.post("/", async (req: AuthRequest, res: Response) => {
 });
 
 teamRoutes.patch("/:teamId", async (req: AuthRequest, res: Response) => {
+  const p = parseParams(teamIdParamsSchema, req.params, res);
+  if (!p) return;
+  const body = parseBody(updateTeamBodySchema, req.body, res);
+  if (!body) return;
   try {
-    const teamId = req.params.teamId as string;
     const userId = req.userId!;
-    const body = req.body as UpdateTeamBody;
-    const team = await updateTeam(teamId, userId, body);
+    const team = await updateTeam(p.teamId, userId, body);
     res.json(team);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to update team";
@@ -78,10 +87,11 @@ teamRoutes.patch("/:teamId", async (req: AuthRequest, res: Response) => {
 });
 
 teamRoutes.delete("/:teamId", async (req: AuthRequest, res: Response) => {
+  const p = parseParams(teamIdParamsSchema, req.params, res);
+  if (!p) return;
   try {
-    const teamId = req.params.teamId as string;
     const userId = req.userId!;
-    await deleteTeam(teamId, userId);
+    await deleteTeam(p.teamId, userId);
     res.status(204).send();
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to delete team";
@@ -94,17 +104,19 @@ teamRoutes.delete("/:teamId", async (req: AuthRequest, res: Response) => {
 });
 
 teamRoutes.post("/:teamId/players", async (req: AuthRequest, res: Response) => {
+  const p = parseParams(teamIdParamsSchema, req.params, res);
+  if (!p) return;
+  const body = parseBody(createPlayerBodySchema, req.body, res);
+  if (!body) return;
   try {
-    const teamId = req.params.teamId as string;
     const userId = req.userId!;
-    const body = req.body as CreatePlayerBody;
-    if (!body.name?.trim() || !body.role || body.aim == null || body.reflex == null || body.decision == null || body.composure == null) {
-      res.status(400).json({ error: "name, role, aim, reflex, decision, composure are required" });
-      return;
-    }
-    const player = await addPlayer(teamId, userId, body);
+    const player = await addPlayer(p.teamId, userId, body);
     res.status(201).json(player);
   } catch (err) {
+    if (isBusinessError(err)) {
+      res.status(400).json(businessErrorPayload(err));
+      return;
+    }
     const msg = err instanceof Error ? err.message : "Failed to add player";
     if (msg === "Team not found") {
       res.status(404).json({ error: msg });
@@ -115,12 +127,13 @@ teamRoutes.post("/:teamId/players", async (req: AuthRequest, res: Response) => {
 });
 
 teamRoutes.patch("/:teamId/players/:playerId", async (req: AuthRequest, res: Response) => {
+  const p = parseParams(teamPlayerParamsSchema, req.params, res);
+  if (!p) return;
+  const body = parseBody(updatePlayerBodySchema, req.body, res);
+  if (!body) return;
   try {
-    const teamId = req.params.teamId as string;
-    const playerId = req.params.playerId as string;
     const userId = req.userId!;
-    const body = req.body as UpdatePlayerBody;
-    const player = await updatePlayer(teamId, playerId, userId, body);
+    const player = await updatePlayer(p.teamId, p.playerId, userId, body);
     res.json(player);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to update player";
@@ -133,11 +146,11 @@ teamRoutes.patch("/:teamId/players/:playerId", async (req: AuthRequest, res: Res
 });
 
 teamRoutes.delete("/:teamId/players/:playerId", async (req: AuthRequest, res: Response) => {
+  const p = parseParams(teamPlayerParamsSchema, req.params, res);
+  if (!p) return;
   try {
-    const teamId = req.params.teamId as string;
-    const playerId = req.params.playerId as string;
     const userId = req.userId!;
-    await removePlayer(teamId, playerId, userId);
+    await removePlayer(p.teamId, p.playerId, userId);
     res.status(204).send();
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to remove player";
@@ -150,11 +163,11 @@ teamRoutes.delete("/:teamId/players/:playerId", async (req: AuthRequest, res: Re
 });
 
 teamRoutes.post("/:teamId/players/:playerId/sell", async (req: AuthRequest, res: Response) => {
+  const p = parseParams(teamPlayerParamsSchema, req.params, res);
+  if (!p) return;
   try {
-    const teamId = req.params.teamId as string;
-    const playerId = req.params.playerId as string;
     const userId = req.userId!;
-    const { sellPrice } = await sellPlayer(teamId, playerId, userId);
+    const { sellPrice } = await sellPlayer(p.teamId, p.playerId, userId);
     res.json({ sellPrice });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to sell player";

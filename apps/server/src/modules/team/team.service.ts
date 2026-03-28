@@ -1,4 +1,6 @@
 import { prisma } from "../../db/index.js";
+import { BusinessError, BusinessErrorCode } from "../../shared/errors.js";
+import { MAX_PLAYERS_PER_TEAM } from "../../shared/teamLimits.js";
 import type { CreateTeamBody, UpdateTeamBody, CreatePlayerBody, UpdatePlayerBody } from "./team.types.js";
 
 /** 5 jogadores de raridade baixa para time inicial no signup */
@@ -81,6 +83,9 @@ export async function deleteTeam(teamId: string, userId: string) {
 
 export async function addPlayer(teamId: string, userId: string, body: CreatePlayerBody) {
   const team = await findTeamById(teamId, userId);
+  if (team.players.length >= MAX_PLAYERS_PER_TEAM) {
+    throw new BusinessError(BusinessErrorCode.TEAM_FULL);
+  }
   const maxOrder = team.players.reduce((max, p) => Math.max(max, p.sortOrder), 0);
   return prisma.player.create({
     data: {

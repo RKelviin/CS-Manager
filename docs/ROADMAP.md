@@ -53,6 +53,28 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 
 ---
 
+## ⚠️ Pontos de Atenção Imediatos
+
+### 🔴 Confiabilidade
+- **Sentry ausente:** nenhum erro de runtime é capturado em produção (FE nem BE). Ver `docs/OBSERVABILIDADE.md`.
+- **Sem validação de input (zod):** rotas de `auth`, `team` e `market` aceitam payloads arbitrários.
+- **Erros não padronizados:** `shared/errors.ts` não cobre erros de negócio (saldo insuficiente, time cheio).
+- **Sem rate limiting:** rotas de autenticação estão expostas a força bruta.
+
+### 🟡 Performance
+- **`getGlobalRanking` sem cache:** consulta full-scan a cada requisição; sem índice composto `(rating DESC, id)`.
+- **Sem paginação por cursor:** ranking carrega todos os registros de uma vez.
+
+### 🟠 Produto / UX
+- **`UserPage` com valores hardcoded:** não usa o sistema de tokens de `theme/tokens.ts` (viola `docs/UI-CONVENCOES.md`).
+- **Histórico de Elo sem rota exposta:** `rating.service.ts` já implementa o histórico, mas `ranking.routes.ts` não o expõe.
+- **Boosters não persistem jogadores:** ao abrir um booster pack, nenhum `Player` real é criado no banco.
+
+### 🔵 Módulos Stub
+- **`/betting`** e **`/stream`** retornam apenas status; nenhuma lógica de negócio implementada.
+
+---
+
 ## Decisões de produto
 
 ### 1. Apostas
@@ -90,41 +112,92 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 
 ## Fases planejadas
 
-### Fase 1 — Polish (curto prazo)
-- Ajustes de UX
-- Testes automatizados (Vitest)
-- Monitoramento (Sentry, UptimeRobot)
+### Fase 0 — Documentação e Arquitetura
+- Manter `ROADMAP.md`, `ARQUITETURA.md`, `ENGINE.md`, `MAPAS.md`, `OBSERVABILIDADE.md` e `UI-CONVENCOES.md` sempre atualizados a cada fase concluída.
+- Registrar decisões de produto e ADRs no diretório `docs/`.
 
-### Fase 2 — Apostas
-- Aposta pré-partida (quem ganha?)
-- Valores: $100–$10.000
-- Pool → rateio entre ganhadores
-- Histórico de apostas
+---
 
-### Fase 3 — Ranking dinâmico
-- Algoritmo: pontuação mais difícil de subir no topo
-- Campeonatos recorrentes (agendamento, inscrições)
-- Ligas públicas por faixa de pontuação
+### Fase 1 — Confiabilidade: Observabilidade, Tratamento de Erros e Validação de Input
 
-### Fase 4 — Centro de treinamento
-- Tela "Centro de treinamento"
-- Tipos de treino por atributo (aim, reflex, decision, composure)
-- Custo: créditos + tempo real
-- Melhorias compráveis para o centro (aumentam ganhos ou reduzem tempo)
-- Ganhos variáveis por atributo e tipo
+> ⚠️ Endereça: 🔴 Sentry ausente · 🔴 Sem zod · 🔴 Erros não padronizados · 🔴 Sem rate limiting
 
-### Fase 5 — Pool booster-driven
-- Booster gera jogadores reais (Player) no banco, vinculados ao time
-- Mercado vende jogadores do pool (não apenas templates)
-- Sistema de queima: usuário ou automático para jogadores ruins
-- (Opcional) Limite de jogadores no time + taxa de manutenção
+- Integrar Sentry no frontend (`main.tsx`, `ErrorBoundary.tsx`) e no backend (`server.ts`) conforme `docs/OBSERVABILIDADE.md`
+- Adicionar validação com `zod` nas rotas de `auth`, `team` e `market`, retornando erros 400 estruturados
+- Expandir `shared/errors.ts` com erros de negócio (saldo insuficiente, time cheio)
+- Adicionar rate limiting em `app.ts` para rotas de autenticação
 
-### Fase 6 — Social e competição
-- Desafios diretos (partida amistosa entre dois times)
-- Treinos entre times (simulação sem pontuação?)
-- Compartilhar replay/histórico (link público)
-- Ligas públicas (ranking como critério)
+---
 
-### Fase 7 — Monetização (pós-MVP)
+### Fase 2 — Polish de UI: Migração de Tokens e Perfil de Usuário Completo
+
+> ⚠️ Endereça: 🟠 UserPage hardcoded · 🟠 Histórico Elo sem rota
+
+- Migrar `UserPage.tsx` dos valores hardcoded para o sistema de tokens de `theme/tokens.ts` seguindo `docs/UI-CONVENCOES.md`
+- Expor `GET /ranking/teams/:teamId/history` em `ranking.routes.ts` (já implementado no `rating.service.ts`)
+- Expandir `UserPage` com histórico de rating Elo, estatísticas de temporada (V/D, K/D/A) e atalho para editar nome do time
+
+---
+
+### Fase 3 — Sistema de Apostas (Betting)
+
+> ⚠️ Endereça: 🔵 Módulo stub `/betting`
+
+- Criar modelo `Bet` no schema Prisma: `userId`, `matchId`, `teamId`, `amount`, `status` (pending/won/lost), `payout`
+- Implementar `betting.service.ts`: `placeBet` (valida $100–$10.000, debita wallet) e `settleBets` (rateio, chamado em `persistMatchResult`)
+- Substituir stub em `betting.routes.ts` com rotas reais: `POST /betting/bets`, `GET /betting/bets`, `GET /betting/matches/:matchId/odds`
+- Criar `BettingPanel` integrado à `SimulationPage`
+
+---
+
+### Fase 4 — Engine: Evolução da Jogabilidade (Novos Mapas e Estratégias)
+- Adicionar 1 novo mapa built-in (ex: Nuke ou Ancient) seguindo o padrão de `inferno.ts` / `inferno.map.json`, registrando em `mapRegistry.ts`
+- Implementar estratégia TR `fake` em `trStrategy.ts` e CT `rotate` em `ctStrategy.ts`
+- Adicionar atributo `morale` (0–100) em `createMatchState.ts`: afeta `composure` após loss streak ≥ 3
+- Expor `morale` no `TeamPanel.tsx`
+
+---
+
+### Fase 5 — Centro de Treinamento
+- Adicionar modelos `TrainingSlot` e `TrainingUpgrade` ao schema Prisma
+- Criar módulo `training` com rotas: `POST /training/start`, `POST /training/collect`, `GET /training/status`
+- Lógica: custo em créditos, ganho de atributo (+1 a +3) após `finishesAt`; upgrades reduzem tempo ou aumentam ganho
+- Criar `TrainingPage.tsx` com seleção de jogador, tipo de treino, timer e botão de coleta
+
+---
+
+### Fase 6 — Pool Booster-Driven e Mercado de Jogadores Reais
+
+> ⚠️ Endereça: 🟠 Boosters sem persistência
+
+- Ao abrir booster: criar `Player` real no banco vinculado ao time do usuário
+- Adicionar modelo `MarketListing` ao Prisma: `playerId`, `sellerId`, `price`, `status`
+- Rotas P2P: `POST /market/listings`, `POST /market/listings/:id/buy`
+- Sistema de queima: `POST /team/players/:id/release` (devolve % do valor)
+- Atualizar `MarketPage` para exibir jogadores reais além dos templates
+
+---
+
+### Fase 7 — Social: Desafios Diretos e Compartilhamento de Replay
+- `POST /simulation/challenge`: cria `Match` com `matchType: 'friendly'` (sem impacto no Elo)
+- `GET /simulation/matches/:id/replay-token`: JWT público de curta duração
+- Rota pública `/replay/:token` no frontend carregando `LiveSpectatorLayout` sem sidebar/header
+- Lista de desafios pendentes no `DashboardPage`
+
+---
+
+### Fase 8 — Escalabilidade: Performance e Ranking Dinâmico
+
+> ⚠️ Endereça: 🟡 getGlobalRanking sem cache · 🟡 Sem índice composto
+
+- Cursor-based pagination em `getGlobalRanking` + índice composto `(rating DESC, id)` via migration Prisma
+- Cache em memória (TTL 30s) para `getGlobalRanking` e `getRankingPreview`
+- `GET /ranking/leagues`: grupos Bronze/Prata/Ouro/Platina/Diamante/Lendário por faixa de rating
+- Job recorrente em `server.ts` (`setInterval`) para criação automática de nova Season
+
+---
+
+### Fase 9 — Monetização (pós-MVP)
 - Recarga de créditos com dinheiro real
-- Assinatura premium → benefícios no centro de treinamento
+- Assinatura premium → benefícios no centro de treinamento (ganhos maiores, tempo reduzido)
+- **MVP:** apenas moeda virtual (sem alteração)

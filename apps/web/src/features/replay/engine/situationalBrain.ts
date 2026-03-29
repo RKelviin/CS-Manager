@@ -6,19 +6,19 @@ import { getSiteCenters, type MapData } from "../map/mapTypes";
 import { WEAPON_FOV, WEAPON_RANGE } from "./combatConstants";
 import { getWeaponFovForRole, getWeaponRangeForRole, threatToCarrierScore } from "./roleCombat";
 import {
-  CT_ECO_TEAM_AVG_THRESHOLD,
-  CT_SAVE_BOT_MONEY_CAP,
+  BLU_SIDE_ECO_TEAM_AVG_THRESHOLD,
+  BLU_SIDE_SAVE_BOT_MONEY_CAP,
   POST_PLANT_ADVANTAGE_RETAKE_MS,
   POST_PLANT_FORCE_RETAKE_MS,
   TEAM_ECO_AVG_THRESHOLD
 } from "./economyConstants";
 import { POST_PLANT_EXPLODE_MS } from "./bombConstants";
-import { FIRST_ROUND_SECOND_HALF, getCtTeamFromState, getTrTeamFromState } from "./matchConstants";
+import { FIRST_ROUND_SECOND_HALF, getBluSideTeamFromState, getRedSideTeamFromState } from "./matchConstants";
 import { shouldSaveEquipment } from "./roundBuy";
 import { weaponKind, weaponTierValue } from "../ui/weaponIcons";
 import { getMapChokePoints } from "../map/mapWaypoints";
-import { getCtHoldPosition, getCtHoldPatrolPositions, TR_FORMATION_OFFSETS } from "./tacticalPositions";
-import { getCtSiteForBot, isCtDefendStrategy } from "./ctStrategy";
+import { getBluHoldPatrolPositions, RED_SIDE_FORMATION_OFFSETS } from "./tacticalPositions";
+import { getBluSiteForBot, isBluSideDefendStrategy } from "./ctStrategy";
 import type { Bot, MatchState, TeamSide } from "../types";
 import type { PlayerView } from "./playerView";
 
@@ -32,17 +32,17 @@ export const FOOTSTEP_MEMORY_TICKS = 22;
 /** Distancia maxima para ouvir passos (menor que tiros) */
 export const HEAR_FOOTSTEP_RANGE = 200;
 const MAP_MARGIN = 14;
-const TR_ROUND_MS = 115000;
+const RED_SIDE_ROUND_MS = 115000;
 
 /**
- * Fake: se TR já domina um bombsite (sem CT na zona e força mínima), planta/movimento nesse site
+ * Fake: se o papel RED já domina um bombsite (sem BLU na zona e força mínima), planta/movimento nesse site
  * em vez de seguir para o outro.
  */
 function getTrDominatedBombsite(state: MatchState): "site-a" | "site-b" | null {
   if (state.redStrategy !== "fake" || state.bombPlanted) return null;
   const map = state.mapData;
-  const trSide = getTrTeamFromState(state);
-  const ctSide = getCtTeamFromState(state);
+  const trSide = getRedSideTeamFromState(state);
+  const ctSide = getBluSideTeamFromState(state);
   const siteCounts = (site: "site-a" | "site-b") => {
     let tr = 0;
     let ct = 0;
@@ -75,13 +75,13 @@ function getTrDominatedBombsite(state: MatchState): "site-a" | "site-b" | null {
   return aOk ? "site-a" : "site-b";
 }
 
-/** Site alvo de movimento TR (fake: finta no começo; se dominar um site, commit para plantar nele). */
-export const getTrMovementExecuteSite = (state: MatchState): "site-a" | "site-b" => {
+/** Site alvo de movimento do papel RED (fake: finta no começo; se dominar um site, commit para plantar nele). */
+export const getRedSideMovementExecuteSite = (state: MatchState): "site-a" | "site-b" => {
   const real = state.tsExecuteSite ?? "site-a";
   if (state.redStrategy === "fake" && !state.bombPlanted) {
     const dominated = getTrDominatedBombsite(state);
     if (dominated != null) return dominated;
-    if (state.timeLeftMs > TR_ROUND_MS * 0.6) return real === "site-a" ? "site-b" : "site-a";
+    if (state.timeLeftMs > RED_SIDE_ROUND_MS * 0.6) return real === "site-a" ? "site-b" : "site-a";
   }
   return real;
 };
@@ -172,7 +172,7 @@ const computeFootstepMovementTarget = (
 };
 
 /**
- * Destino ao ouvir tiros: aproximar (T / CT agressivo) ou contestar com ancora (hold) / plant (retake).
+ * Destino ao ouvir tiros: aproximar (papel RED / BLU agressivo) ou contestar com ancora (hold) / plant (retake).
  * Nao substitui pos-plant, C4, escolta — so e aplicado depois dessas regras em applySituationalMovement.
  */
 export const computeGunfireMovementTarget = (
@@ -214,10 +214,10 @@ export const computeGunfireMovementTarget = (
     return clampToMap(state.mapData, gx + perpX * flank * side, gy + perpY * flank * side);
   };
 
-  if (bot.team === getTrTeamFromState(state)) {
+  if (bot.team === getRedSideTeamFromState(state)) {
     towardT += 0.06;
-    const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
-    /** TR: ao ouvir tiros, avancar em direcao ao site (dominar bombsite) mesmo ao rotacionar */
+    const site = getSiteCenters(state.mapData)[getRedSideMovementExecuteSite(state)];
+    /** Papel RED: ao ouvir tiros, avancar em direcao ao site (dominar bombsite) mesmo ao rotacionar */
     const execBlend = bot.role === "IGL" ? 0.22 : 0.16;
     const rawX = bot.x + (primary.x - bot.x) * towardT;
     const rawY = bot.y + (primary.y - bot.y) * towardT;
@@ -228,7 +228,7 @@ export const computeGunfireMovementTarget = (
 
   const slot = botSlotIndex(bot);
   const anchorSite = getSiteCenters(state.mapData)[
-    getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite)
+    getBluSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite)
   ];
 
   if ((state.bluStrategy === "retake" || state.bluStrategy === "rotate") && state.bombPlantSite) {
@@ -242,7 +242,7 @@ export const computeGunfireMovementTarget = (
     return applyLurkerFlank(gx, gy);
   }
 
-  if (isCtDefendStrategy(state.bluStrategy)) {
+  if (isBluSideDefendStrategy(state.bluStrategy)) {
     /** AWP em hold: manter mais distância, segurar ângulo */
     const t = bot.role === "AWP" ? Math.max(0.08, towardT - 0.22) : Math.max(0.12, towardT - 0.1);
     const rawX = bot.x + (primary.x - bot.x) * t;
@@ -340,7 +340,7 @@ const defaultChokes = () => ({
   tApproach: { x: 400, y: 460 }
 });
 
-/** Pos-plant CT (nao eco): defuse direto ou rotacao mid/flanco para caçar TRs */
+/** Pos-plant papel BLU (nao eco): defuse direto ou rotacao mid/flanco para caçar atacantes */
 type CtPostPlantMode = "defuse" | "hunt";
 
 const ctPostPlantMode = (
@@ -351,7 +351,7 @@ const ctPostPlantMode = (
   trAlive: number
 ): CtPostPlantMode => {
   if (urgent) return "defuse";
-  /** Todos os TRs mortos: nao ha quem cacar, sempre defuse */
+  /** Todo o papel RED morto: nao ha quem cacar, sempre defuse */
   if (trAlive === 0) return "defuse";
 
   const slot = botSlotIndex(bot);
@@ -371,7 +371,7 @@ const ctPostPlantMode = (
   if (bot.displayRole === "Support") return "defuse";
   if (bot.displayRole === "Lurker") return "hunt";
 
-  /** TRs em vantagem: mais CTs vao defuse (menos hunt) */
+  /** Papel RED em vantagem: mais defensores vao defuse (menos hunt) */
   const trsAdvantage = trAlive >= ctAlive + 1;
 
   if (strat === "aggressive") {
@@ -391,7 +391,7 @@ const ctPostPlantMode = (
   return slot % 2 === 0 ? "hunt" : "defuse";
 };
 
-/** Limite de tempo (ms restantes) para considerar retake urgente — dinamico: CTs em vantagem avancam mais cedo */
+/** Limite de tempo (ms restantes) para considerar retake urgente — dinamico: defesa em vantagem avanca mais cedo */
 const getPostPlantUrgentThresholdMs = (ctAlive: number, trAlive: number, hasFullBuy: boolean): number => {
   if (ctAlive >= trAlive + 2) return POST_PLANT_ADVANTAGE_RETAKE_MS;
   if (ctAlive >= trAlive + 1 || (ctAlive >= trAlive && hasFullBuy)) return 26000;
@@ -400,7 +400,7 @@ const getPostPlantUrgentThresholdMs = (ctAlive: number, trAlive: number, hasFull
 
 /**
  * Aproximação por mid + offset lateral ao corredor spawn→bomba.
- * Órbita ampla e patrulha por ciclo de ticks para CTs não ficarem parados.
+ * Órbita ampla e patrulha por ciclo de ticks para o papel BLU não ficar parado.
  */
 const ctPostPlantHuntTarget = (bot: Bot, state: MatchState): { x: number; y: number } => {
   const bomb = getPlantedBombWorldPos(state)!;
@@ -425,7 +425,7 @@ const ctPostPlantHuntTarget = (bot: Bot, state: MatchState): { x: number; y: num
   const midShort = (state.mapData.zones?.some((z) => z.id === "site-a") ? getMapChokePoints(state.mapData).mid : defaultChokes().midShort);
   let bx = bomb.x * (1 - along) + midShort.x * along + px * (isAwp ? lateral * 0.7 : lateral);
   let by = bomb.y * (1 - along) + midShort.y * along + py * (isAwp ? lateral * 0.7 : lateral);
-  /** Órbita ampla: CTs patrulham em vez de ficar parados — ciclo ~4s para riflers */
+  /** Órbita ampla: defesa patrulha em vez de ficar parada — ciclo ~4s para riflers */
   const tick = state.tickId ?? 0;
   const phase = tick * 0.21 + slot * 0.82;
   const orbit = isAwp ? 18 : 56;
@@ -487,10 +487,10 @@ const tacticalLookPoints = (bot: Bot, state: MatchState): { x: number; y: number
     const bomb = getPlantedBombWorldPos(state)!;
     add(bomb);
     if (bot.team === "RED") {
-      add(CT_RETAKE_HINT);
+      add(BLU_SIDE_RETAKE_HINT);
       add(chokes?.mid ?? def.midLong);
       add(chokes?.chokeA ?? def.midShort);
-      add({ x: (bomb.x + CT_RETAKE_HINT.x) / 2, y: (bomb.y + CT_RETAKE_HINT.y) / 2 });
+      add({ x: (bomb.x + BLU_SIDE_RETAKE_HINT.x) / 2, y: (bomb.y + BLU_SIDE_RETAKE_HINT.y) / 2 });
       add({ x: bomb.x + (T_SAFE_ANCHOR.x - bomb.x) * 0.45, y: bomb.y + (T_SAFE_ANCHOR.y - bomb.y) * 0.45 });
     } else {
       add({ x: bomb.x, y: bomb.y + 120 });
@@ -573,14 +573,14 @@ const pickNearestTacticalAimAngle = (bot: Bot, state: MatchState, tickId: number
   return bestA;
 };
 
-/** Aproximacao de onde os CTs entram no retake (norte do mapa) */
-const CT_RETAKE_HINT = { x: 400, y: 120 };
+/** Aproximacao de onde a defesa entra no retake (norte do mapa) */
+const BLU_SIDE_RETAKE_HINT = { x: 400, y: 120 };
 /** Saida / refugio T (sul) — pos-plant: afastar da bomba nessa direcao para usar alcance maximo */
 const T_SAFE_ANCHOR = { x: 400, y: 460 };
 
 /**
- * Pos-plant TR: afasta da C4 na direcao segura (sul/mid), distancia ~ proporcional ao alcance da arma.
- * Órbita leve para não ficar parado esperando CTs.
+ * Pos-plant papel RED: afasta da C4 na direcao segura (sul/mid), distancia ~ proporcional ao alcance da arma.
+ * Órbita leve para não ficar parado esperando a defesa.
  */
 const postPlantTDefenseTarget = (bot: Bot, state: MatchState): { x: number; y: number } => {
   const bomb = getPlantedBombWorldPos(state)!;
@@ -619,7 +619,7 @@ const avgTeamMoney = (state: MatchState, side: TeamSide) => {
 
 /**
  * Ajusta destino de movimento conforme situacao (sobrescreve waypoint tatico).
- * Prioridade: pos-plant T defesa > pos-plant CT eco/retake > retirada > C4 > ...
+ * Prioridade: pos-plant RED defesa > pos-plant BLU eco/retake > retirada > C4 > ...
  * Se view for passada, usa dados localizados para barulho de tiros.
  */
 export const applySituationalMovement = (bot: Bot, state: MatchState, view?: PlayerView) => {
@@ -630,8 +630,8 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
   const spawnRed = { x: 400, y: 530 };
   const spawnBlu = { x: 400, y: 72 };
 
-  // 0) C4 plantada: Ts — se CT esta defusando, correm pro site (barulho); senao post-plant longe da bomba
-  if (state.bombPlanted && state.bombPlantSite && bot.team === getTrTeamFromState(state) && bot.hp > 0) {
+  // 0) C4 plantada: papel RED — se BLU esta defusando, correm pro site (barulho); senao post-plant longe da bomba
+  if (state.bombPlanted && state.bombPlantSite && bot.team === getRedSideTeamFromState(state) && bot.hp > 0) {
     if (state.defuseProgressMs > 0 && state.defuserId) {
       const bomb = getPlantedBombWorldPos(state)!;
       const slot = botSlotIndex(bot);
@@ -649,8 +649,8 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     return;
   }
 
-  // 0a) CT sem kit: ir ao kit no chao (drop mais proximo). Pos-plant urgente: prioriza bomba; caso contrario ou pre-plant: prioriza kit
-  if (bot.team === getCtTeamFromState(state) && bot.hp > 0 && !bot.hasDefuseKit && (state.defuseKitDrops?.length ?? 0) > 0) {
+  // 0a) BLU sem kit: ir ao kit no chao (drop mais proximo). Pos-plant urgente: prioriza bomba; caso contrario ou pre-plant: prioriza kit
+  if (bot.team === getBluSideTeamFromState(state) && bot.hp > 0 && !bot.hasDefuseKit && (state.defuseKitDrops?.length ?? 0) > 0) {
     const urgent =
       Boolean(state.bombPlanted && state.bombPlantSite) &&
       state.postPlantTimeLeftMs > 0 &&
@@ -673,11 +673,11 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     }
   }
 
-  // 1) C4 plantada: CTs — avaliar numeros, economia, tempo; staging em eco; urgencia dinamica; defuse/hunt
-  if (state.bombPlanted && state.bombPlantSite && bot.team === getCtTeamFromState(state) && bot.hp > 0) {
+  // 1) C4 plantada: papel BLU — avaliar numeros, economia, tempo; staging em eco; urgencia dinamica; defuse/hunt
+  if (state.bombPlanted && state.bombPlantSite && bot.team === getBluSideTeamFromState(state) && bot.hp > 0) {
     const bomb = getPlantedBombWorldPos(state)!;
-    const ctTeam = getCtTeamFromState(state);
-    const trTeam = getTrTeamFromState(state);
+    const ctTeam = getBluSideTeamFromState(state);
+    const trTeam = getRedSideTeamFromState(state);
     const ctAlive = aliveOnSide(state, ctTeam).length;
     const trAlive = aliveOnSide(state, trTeam).length;
     const avg = avgTeamMoney(state, ctTeam);
@@ -687,8 +687,9 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     const urgentThresholdMs = getPostPlantUrgentThresholdMs(ctAlive, trAlive, hasFullBuy);
     const urgent = state.postPlantTimeLeftMs > 0 && state.postPlantTimeLeftMs <= urgentThresholdMs;
 
-    /** Eco: pistola + time pobre. Usa staging (perto do site) em vez de spawn — chega mais rapido quando urgente. Exceto se todos TRs mortos: vai defusar. */
-    const isEco = avg < CT_ECO_TEAM_AVG_THRESHOLD && bot.money <= CT_SAVE_BOT_MONEY_CAP && !hasRifle;
+    /** Eco: pistola + time pobre. Usa staging (perto do site) em vez de spawn — chega mais rapido quando urgente. Exceto se todo o papel RED morto: vai defusar. */
+    const isEco =
+      avg < BLU_SIDE_ECO_TEAM_AVG_THRESHOLD && bot.money <= BLU_SIDE_SAVE_BOT_MONEY_CAP && !hasRifle;
 
     if (isEco && !urgent && trAlive > 0) {
       const slot = botSlotIndex(bot);
@@ -714,7 +715,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
       if (bot.hp > RETREAT_HP) {
         const soundMove = computeGunfireMovementTarget(bot, state, state.tickId, view);
         if (soundMove) {
-          /** TRs vivos: puxar mais em direção ao barulho para engajar, não esperar passivo */
+          /** Papel RED vivo: puxar mais em direção ao barulho para engajar, não esperar passivo */
           bot.targetX = soundMove.x * 0.72 + hunt.x * 0.28;
           bot.targetY = soundMove.y * 0.72 + hunt.y * 0.28;
           return;
@@ -727,9 +728,9 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
 
     const mode = ctPostPlantMode(bot, state, urgent, ctAlive, trAlive);
     if (mode === "defuse") {
-      /** TRs mortos: todos os CTs vão à bomba (ninguém para cobrir); 2+ vivos fazem cover os slots 2–4 */
+      /** Papel RED morto: toda a defesa vai à bomba (ninguém para cobrir); 2+ vivos fazem cover os slots 2–4 */
       if (trAlive === 0) {
-        /** Único CT ou todos vão defusar — garantir que ninguém fique parado em "cover" */
+        /** Único defensor ou todos vão defusar — garantir que ninguém fique parado em "cover" */
         bot.targetX = bomb.x;
         bot.targetY = bomb.y;
       } else if (ctAlive >= 2) {
@@ -775,22 +776,22 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     return;
   }
 
-  // 2) Pouca vida + ameaca proxima -> save / recuar (exceto Ts com bomba plantada — ja tratado acima)
+  // 2) Pouca vida + ameaca proxima -> save / recuar (exceto papel RED com bomba plantada — ja tratado acima)
   if (bot.hp <= RETREAT_HP && threat && enemies.length >= allies.length) {
-    const spawn = bot.team === getCtTeamFromState(state) ? spawnBlu : spawnRed;
+    const spawn = bot.team === getBluSideTeamFromState(state) ? spawnBlu : spawnRed;
     bot.targetX = spawn.x;
     bot.targetY = spawn.y;
     return;
   }
 
-  // 3) TR sem bomba e C4 no chao -> priorizar pickup (objetivo principal)
-  if (bot.team === getTrTeamFromState(state) && !bot.hasBomb && state.bombDroppedAt) {
+  // 3) Papel RED sem bomba e C4 no chao -> priorizar pickup (objetivo principal)
+  if (bot.team === getRedSideTeamFromState(state) && !bot.hasBomb && state.bombDroppedAt) {
     bot.targetX = state.bombDroppedAt.x;
     bot.targetY = state.bombDroppedAt.y;
     return;
   }
 
-  // 3a) Primaria melhor no chao: aproximar (qualquer time; depois da prioridade da C4 para TR)
+  // 3a) Primaria melhor no chao: aproximar (qualquer time; depois da prioridade da C4 para papel RED)
   if (
     bot.hp > RETREAT_HP &&
     (!threat || dist(bot, threat) > 95) &&
@@ -813,14 +814,14 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     }
   }
 
-  // 3b) TRs sem C4: escoltar o portador rumo ao site (formacao por displayRole — Entry frente, AWP atrás)
+  // 3b) Papel RED sem C4: escoltar o portador rumo ao site (formacao por displayRole — Entry frente, AWP atrás)
   // Suporte/Entry nao ficam presos na base: se portador ainda no spawn, avancam ao site
-  if (bot.team === getTrTeamFromState(state) && !bot.hasBomb && bot.hp > 0 && !state.bombPlanted && !state.bombDroppedAt) {
-    const carrier = state.bots.find((b) => b.team === getTrTeamFromState(state) && b.hasBomb && b.hp > 0);
+  if (bot.team === getRedSideTeamFromState(state) && !bot.hasBomb && bot.hp > 0 && !state.bombPlanted && !state.bombDroppedAt) {
+    const carrier = state.bots.find((b) => b.team === getRedSideTeamFromState(state) && b.hasBomb && b.hp > 0);
     if (carrier) {
-      const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
+      const site = getSiteCenters(state.mapData)[getRedSideMovementExecuteSite(state)];
       const isSecondHalf = state.round >= FIRST_ROUND_SECOND_HALF;
-      // TR spawn: first half RED (y~530), second half BLU (y~72)
+      // Spawn ataque: 1.ª metade roster RED (y~530), 2.ª metade roster BLU (y~72)
       const carrierInSpawn =
         (isSecondHalf && carrier.y < 180) || (!isSecondHalf && carrier.y > 420);
       const roleKey = bot.displayRole ?? (bot.role === "AWP" ? "Sniper" : bot.role === "IGL" ? "IGL" : "Support");
@@ -829,12 +830,12 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
         bot.targetY = site.y;
         return;
       }
-      const offsets = TR_FORMATION_OFFSETS[roleKey] ?? TR_FORMATION_OFFSETS.Support;
+      const offsets = RED_SIDE_FORMATION_OFFSETS[roleKey] ?? RED_SIDE_FORMATION_OFFSETS.Support;
       const toSite = Math.atan2(site.y - carrier.y, site.x - carrier.x);
       const perp = toSite + Math.PI / 2;
       let fx = Math.cos(toSite) * offsets.forward + Math.cos(perp) * offsets.lateral;
       let fy = Math.sin(toSite) * offsets.forward + Math.sin(perp) * offsets.lateral;
-      const execSiteId = getTrMovementExecuteSite(state);
+      const execSiteId = getRedSideMovementExecuteSite(state);
       const execC = getSiteCenters(state.mapData)[execSiteId];
       const dangerNearExec =
         view?.dangerSpots?.some((d) => Math.hypot(d.x - execC.x, d.y - execC.y) < 190) ?? false;
@@ -850,21 +851,21 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
       return;
     }
     // Sem portador (ex.: morreu, C4 no chao): ir ao site em vez de ficar parado
-    const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
+    const site = getSiteCenters(state.mapData)[getRedSideMovementExecuteSite(state)];
     bot.targetX = site.x;
     bot.targetY = site.y;
     return;
   }
 
-  // 4) Portador TR -> executar site alvo do round (dominar bombsite e plantar)
-  if (bot.team === getTrTeamFromState(state) && bot.hasBomb) {
-    const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
+  // 4) Portador papel RED -> executar site alvo do round (dominar bombsite e plantar)
+  if (bot.team === getRedSideTeamFromState(state) && bot.hasBomb) {
+    const site = getSiteCenters(state.mapData)[getRedSideMovementExecuteSite(state)];
     bot.targetX = site.x;
     bot.targetY = site.y;
     return;
   }
 
-  // 1b) Save de equipamento (eco): spawn seguro — nao aplica a TR com objetivo C4/site (ja tratado acima)
+  // 1b) Save de equipamento (eco): spawn seguro — nao aplica ao papel RED com objetivo C4/site (ja tratado acima)
   if (shouldSaveEquipment(bot, state)) {
     const isSecondHalf = state.round >= FIRST_ROUND_SECOND_HALF;
     const spawn =
@@ -877,7 +878,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
 
   // 5) BLU em retake com C4 no chao -> contestar bomba
   if (
-    bot.team === getCtTeamFromState(state) &&
+    bot.team === getBluSideTeamFromState(state) &&
     (state.bluStrategy === "retake" || state.bluStrategy === "rotate") &&
     state.bombDroppedAt
   ) {
@@ -886,10 +887,10 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     return;
   }
 
-  // 5a) CT em defesa (pre-plant): patrulha — priorizar dangerSpots (ângulos cegos)
+  // 5a) Papel BLU em defesa (pre-plant): patrulha — priorizar dangerSpots (ângulos cegos)
   if (
-    bot.team === getCtTeamFromState(state) &&
-    isCtDefendStrategy(state.bluStrategy) &&
+    bot.team === getBluSideTeamFromState(state) &&
+    isBluSideDefendStrategy(state.bluStrategy) &&
     !state.bombPlanted &&
     bot.hp > RETREAT_HP &&
     !shouldSaveEquipment(bot, state)
@@ -900,7 +901,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
       bot.targetY = nearest.y;
       return;
     }
-    const patrol = getCtHoldPatrolPositions(bot, state);
+    const patrol = getBluHoldPatrolPositions(bot, state);
     const tick = state.tickId ?? 0;
     const slot = botSlotIndex(bot);
     const phase = Math.floor((tick + slot * 15) / 40) % patrol.length;
@@ -910,7 +911,7 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     return;
   }
 
-  // 5b) Barulho de tiro inimigo: aproximar/rotacionar conforme time, estrategia CT e role (nao sobrepoe C4/escolta/portador)
+  // 5b) Barulho de tiro inimigo: aproximar/rotacionar conforme time, estrategia BLU e role (nao sobrepoe C4/escolta/portador)
   if (bot.hp > RETREAT_HP) {
     const soundMove = computeGunfireMovementTarget(bot, state, state.tickId, view);
     if (soundMove) {
@@ -930,17 +931,17 @@ export const applySituationalMovement = (bot: Bot, state: MatchState, view?: Pla
     }
   }
 
-  // 6) Tempo baixo: TRs aceleram para o bombsite alvo (dominar e plantar); BLU segura ancora
-  /** ~35–5s restantes: TRs convergem ao site para dominar e plantar juntos; ultimos 5s nao forcar */
+  // 6) Tempo baixo: papel RED acelera para o bombsite alvo (dominar e plantar); defesa segura ancora
+  /** ~35–5s restantes: papel RED converge ao site para dominar e plantar junto; ultimos 5s nao forcar */
   if (state.timeLeftMs < 35000 && !state.bombPlanted && state.timeLeftMs > 5000) {
-    if (bot.team === getTrTeamFromState(state) && bot.hp > RETREAT_HP) {
-      const site = getSiteCenters(state.mapData)[getTrMovementExecuteSite(state)];
+    if (bot.team === getRedSideTeamFromState(state) && bot.hp > RETREAT_HP) {
+      const site = getSiteCenters(state.mapData)[getRedSideMovementExecuteSite(state)];
       bot.targetX = site.x;
       bot.targetY = site.y;
     }
-    if (bot.team === getCtTeamFromState(state) && isCtDefendStrategy(state.bluStrategy)) {
+    if (bot.team === getBluSideTeamFromState(state) && isBluSideDefendStrategy(state.bluStrategy)) {
       const slot = botSlotIndex(bot);
-      const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
+      const site = getBluSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
       const anchor = getSiteCenters(state.mapData)[site];
       bot.targetX = anchor.x;
       bot.targetY = anchor.y;
@@ -965,7 +966,7 @@ export const computeDesiredAimAngle = (
     ? view.enemiesInFov.map((x) => x.bot)
     : enemiesOf(state, bot).filter((e) => canSeeWithFov(state.mapData, bot, e, getWeaponFovForRole(bot), rng));
   if (visible.length > 0) {
-    if (state.bombPlanted && state.bombPlantSite && bot.team === getTrTeamFromState(state)) {
+    if (state.bombPlanted && state.bombPlantSite && bot.team === getRedSideTeamFromState(state)) {
       const bomb = getPlantedBombWorldPos(state)!;
       const t = [...visible].sort((a, b) => dist(a, bomb) - dist(b, bomb))[0];
       return Math.atan2(t.y - bot.y, t.x - bot.x);
@@ -993,7 +994,7 @@ export const computeDesiredAimAngle = (
     ? view.enemiesWithLos
     : enemiesOf(state, bot).filter((e) => hasLineOfSight(state.mapData, bot, e, rng));
   if (losEnemies.length > 0) {
-    if (state.bombPlanted && state.bombPlantSite && bot.team === getTrTeamFromState(state)) {
+    if (state.bombPlanted && state.bombPlantSite && bot.team === getRedSideTeamFromState(state)) {
       const bomb = getPlantedBombWorldPos(state)!;
       const t = [...losEnemies].sort((a, b) => dist(a, bomb) - dist(b, bomb))[0];
       return Math.atan2(t.y - bot.y, t.x - bot.x);
@@ -1041,12 +1042,12 @@ export const computeDesiredAimAngle = (
     }
   }
 
-  /** Pos-plant TR sem alvo: pre-mirar entradas do retake (norte) usando alcance */
-  if (state.bombPlanted && state.bombPlantSite && bot.team === getTrTeamFromState(state)) {
+  /** Pos-plant papel RED sem alvo: pre-mirar entradas do retake (norte) usando alcance */
+  if (state.bombPlanted && state.bombPlantSite && bot.team === getRedSideTeamFromState(state)) {
     const bomb = getPlantedBombWorldPos(state)!;
     const preferRetake = Math.atan2(
-      (CT_RETAKE_HINT.y + bomb.y) / 2 - bot.y,
-      (CT_RETAKE_HINT.x + bomb.x) / 2 - bot.x
+      (BLU_SIDE_RETAKE_HINT.y + bomb.y) / 2 - bot.y,
+      (BLU_SIDE_RETAKE_HINT.x + bomb.x) / 2 - bot.x
     );
     return pickNearestTacticalAimAngle(bot, state, tickId, preferRetake);
   }
@@ -1061,8 +1062,8 @@ export const computeDesiredAimAngle = (
  */
 export const pickCombatVictim = (attacker: Bot, inSight: Bot[], state: MatchState) => {
   if (inSight.length === 0) return null;
-  if (attacker.role === "IGL" && attacker.team === getTrTeamFromState(state) && !state.bombPlanted) {
-    const carrier = state.bots.find((b) => b.team === getTrTeamFromState(state) && b.hasBomb && b.hp > 0);
+  if (attacker.role === "IGL" && attacker.team === getRedSideTeamFromState(state) && !state.bombPlanted) {
+    const carrier = state.bots.find((b) => b.team === getRedSideTeamFromState(state) && b.hasBomb && b.hp > 0);
     if (carrier) {
       const site = getSiteCenters(state.mapData)[state.tsExecuteSite];
       return [...inSight].sort(
@@ -1070,7 +1071,7 @@ export const pickCombatVictim = (attacker: Bot, inSight: Bot[], state: MatchStat
       )[0];
     }
   }
-  if (attacker.role === "IGL" && attacker.team === getCtTeamFromState(state) && state.bombPlanted && state.bombPlantSite) {
+  if (attacker.role === "IGL" && attacker.team === getBluSideTeamFromState(state) && state.bombPlanted && state.bombPlantSite) {
     const bomb = getPlantedBombWorldPos(state)!;
     return [...inSight].sort((a, b) => dist(a, bomb) - dist(b, bomb))[0];
   }

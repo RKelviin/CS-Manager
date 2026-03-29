@@ -1,17 +1,33 @@
 import { DUST2_MAP } from "../map/dust2Map";
 import type { MapData } from "../map/mapTypes";
-import type { ArmorLoadout, Bot, MatchState, MatchSetup, RedStrategy, BluStrategy } from "../types";
+import type {
+  ArmorLoadout,
+  Bot,
+  MatchState,
+  MatchSetup,
+  RedStrategy,
+  BluStrategy,
+  StartsAsSide
+} from "../types";
 import { START_MONEY } from "./economyConstants";
-import { getCtTeam, getTrTeam } from "./matchConstants";
+import { getBluSideTeam, getRedSideTeam } from "./matchConstants";
 import { BLU_ROLES, RED_ROLES } from "./roleCombat";
 import { defaultStrategyWeights } from "./strategyLearning";
 
 const DEFAULT_RED_NAMES = ["RED-1", "RED-2", "RED-3", "RED-4", "RED-5"];
 const DEFAULT_BLU_NAMES = ["BLU-1", "BLU-2", "BLU-3", "BLU-4", "BLU-5"];
 
-/** Pistolas por lado: TR = Glock, CT = USP */
-const TR_PISTOL = "Glock-18";
-const CT_PISTOL = "USP-S";
+/** Pistolas por papel: RED (ataque) = Glock, BLU (defesa) = USP */
+const RED_ROLE_PISTOL = "Glock-18";
+const BLU_ROLE_PISTOL = "USP-S";
+
+/** Valores legados TR/CT (persistência antiga) → RED/BLU */
+const normalizeTeamAStartsAs = (v: unknown): StartsAsSide => {
+  if (v === "TR") return "RED";
+  if (v === "CT") return "BLU";
+  if (v === "RED" || v === "BLU") return v;
+  return "RED";
+};
 
 const RED_STRATS: RedStrategy[] = ["rush", "split", "slow", "default", "fake"];
 const BLU_STRATS: BluStrategy[] = ["default", "stack-a", "stack-b", "aggressive", "rotate"];
@@ -26,9 +42,9 @@ const getSiteCenter = (map: MapData, siteId: "site-a" | "site-b") => {
 
 const createBots = (setup: MatchSetup, map: MapData, round = 1): Bot[] => {
   const { teamAStartsAs, teamAPlayers, teamBPlayers, teamAPlayerData, teamBPlayerData } = setup;
-  const trTeam = getTrTeam(round, teamAStartsAs);
-  const ctTeam = getCtTeam(round, teamAStartsAs);
-  const redIsTr = trTeam === "RED";
+  const trTeam = getRedSideTeam(round, teamAStartsAs);
+  const ctTeam = getBluSideTeam(round, teamAStartsAs);
+  const redOnAttack = trTeam === "RED";
   const bombCarrierIndex = Math.floor(Math.random() * 5);
 
   const redNames = teamAPlayers.length >= 5 ? teamAPlayers : DEFAULT_RED_NAMES;
@@ -38,9 +54,9 @@ const createBots = (setup: MatchSetup, map: MapData, round = 1): Bot[] => {
 
   const red = redNames.slice(0, 5).map((name, index) => {
     const custom = useRedData ? teamAPlayerData![index] : null;
-    const spawn = redIsTr ? map.spawnPoints.RED[index] : map.spawnPoints.BLU[index];
-    const target = redIsTr ? { x: 400, y: 450 } : { x: 400, y: 150 };
-    const pistol = redIsTr ? TR_PISTOL : CT_PISTOL;
+    const spawn = redOnAttack ? map.spawnPoints.RED[index] : map.spawnPoints.BLU[index];
+    const target = redOnAttack ? { x: 400, y: 450 } : { x: 400, y: 150 };
+    const pistol = redOnAttack ? RED_ROLE_PISTOL : BLU_ROLE_PISTOL;
     return {
       id: `red-${index}`,
       name: custom?.name ?? name,
@@ -54,7 +70,7 @@ const createBots = (setup: MatchSetup, map: MapData, round = 1): Bot[] => {
       hp: 100,
       x: spawn.x,
       y: spawn.y,
-      angle: redIsTr ? -Math.PI / 2 : Math.PI / 2,
+      angle: redOnAttack ? -Math.PI / 2 : Math.PI / 2,
       aim: custom?.aim ?? 72 + (index % 4) * 3,
       targetX: target.x,
       targetY: target.y,
@@ -69,8 +85,8 @@ const createBots = (setup: MatchSetup, map: MapData, round = 1): Bot[] => {
       money: START_MONEY,
       primaryWeapon: pistol,
       secondaryWeapon: pistol,
-      hasBomb: redIsTr && index === bombCarrierIndex,
-      hasDefuseKit: false,
+      hasBomb: redOnAttack && index === bombCarrierIndex,
+      hasDefuseKit: !redOnAttack && index === 0,
       armor: "none" as ArmorLoadout,
       lastDamageTick: -1,
       lastDamageFromX: 0,
@@ -85,10 +101,10 @@ const createBots = (setup: MatchSetup, map: MapData, round = 1): Bot[] => {
 
   const blu = bluNames.slice(0, 5).map((name, index) => {
     const custom = useBluData ? teamBPlayerData![index] : null;
-    const bluIsTr = trTeam === "BLU";
-    const spawn = bluIsTr ? map.spawnPoints.RED[index] : map.spawnPoints.BLU[index];
-    const target = bluIsTr ? { x: 400, y: 450 } : { x: 400, y: 150 };
-    const pistol = bluIsTr ? TR_PISTOL : CT_PISTOL;
+    const bluOnAttack = trTeam === "BLU";
+    const spawn = bluOnAttack ? map.spawnPoints.RED[index] : map.spawnPoints.BLU[index];
+    const target = bluOnAttack ? { x: 400, y: 450 } : { x: 400, y: 150 };
+    const pistol = bluOnAttack ? RED_ROLE_PISTOL : BLU_ROLE_PISTOL;
     return {
       id: `blu-${index}`,
       name: custom?.name ?? name,
@@ -102,7 +118,7 @@ const createBots = (setup: MatchSetup, map: MapData, round = 1): Bot[] => {
       hp: 100,
       x: spawn.x,
       y: spawn.y,
-      angle: bluIsTr ? -Math.PI / 2 : Math.PI / 2,
+      angle: bluOnAttack ? -Math.PI / 2 : Math.PI / 2,
       aim: custom?.aim ?? 74 + (index % 4) * 3,
       targetX: target.x,
       targetY: target.y,
@@ -117,8 +133,8 @@ const createBots = (setup: MatchSetup, map: MapData, round = 1): Bot[] => {
       money: START_MONEY,
       primaryWeapon: pistol,
       secondaryWeapon: pistol,
-      hasBomb: bluIsTr && index === bombCarrierIndex,
-      hasDefuseKit: !bluIsTr && index === 0,
+      hasBomb: bluOnAttack && index === bombCarrierIndex,
+      hasDefuseKit: !bluOnAttack && index === 0,
       armor: "none" as ArmorLoadout,
       lastDamageTick: -1,
       lastDamageFromX: 0,
@@ -193,7 +209,7 @@ const defaultSetup: MatchSetup = {
   teamBName: "BLU",
   teamAPlayers: DEFAULT_RED_NAMES,
   teamBPlayers: DEFAULT_BLU_NAMES,
-  teamAStartsAs: "TR"
+  teamAStartsAs: "RED"
 };
 
 /** Cria estado inicial. Aceita setup ou estado anterior (para reset preservando config). fullReset=true ignora score/round do init. */
@@ -218,7 +234,7 @@ export const createMatchState = (
               teamBName: st.teamBName,
               teamAPlayers: redBots.map((b) => b.name),
               teamBPlayers: bluBots.map((b) => b.name),
-              teamAStartsAs: st.teamAStartsAs,
+              teamAStartsAs: normalizeTeamAStartsAs(st.teamAStartsAs),
               mapData: st.mapData,
               matchType: st.matchType,
               teamAPlayerData: redBots.map((b) => ({
@@ -245,16 +261,21 @@ export const createMatchState = (
           })()
         : defaultSetup;
 
+  const setupNorm: MatchSetup = {
+    ...setup,
+    teamAStartsAs: normalizeTeamAStartsAs(setup.teamAStartsAs)
+  };
+
   const round = init && "round" in init && "bots" in init ? (init as MatchState).round : 1;
-  const matchType = setup.matchType ?? "friendly";
+  const matchType = setupNorm.matchType ?? "friendly";
   const prevMatch = init && "bots" in init ? (init as MatchState) : null;
   const redStrategy = pickStrategy(RED_STRATS);
   const tsExecuteSite = Math.random() < 0.5 ? "site-a" : "site-b";
   const bluStrategy: BluStrategy = "default";
   const siteLabel = tsExecuteSite === "site-a" ? "A" : "B";
   const sitePos = getSiteCenter(map, tsExecuteSite);
-  const trLabel = setup.teamAStartsAs === "TR" ? setup.teamAName : setup.teamBName;
-  const ctLabel = setup.teamAStartsAs === "TR" ? setup.teamBName : setup.teamAName;
+  const redRoleLabel = setupNorm.teamAStartsAs === "RED" ? setupNorm.teamAName : setupNorm.teamBName;
+  const bluRoleLabel = setupNorm.teamAStartsAs === "RED" ? setupNorm.teamBName : setupNorm.teamAName;
 
   const strategyHistory =
     fullReset || !prevMatch ? [] : [...(prevMatch.strategyHistory ?? [])];
@@ -275,9 +296,9 @@ export const createMatchState = (
       : prevMatch.customBluStrategies.map((c) => ({ ...c, stats: { ...c.stats } }));
 
   return {
-    teamAName: setup.teamAName,
-    teamBName: setup.teamBName,
-    teamAStartsAs: setup.teamAStartsAs,
+    teamAName: setupNorm.teamAName,
+    teamBName: setupNorm.teamBName,
+    teamAStartsAs: setupNorm.teamAStartsAs,
     mapData: map,
     round: fullReset || !(init && "round" in init) ? 1 : (init as MatchState).round,
     timeLeftMs: 115000,
@@ -293,7 +314,7 @@ export const createMatchState = (
         : { ...(init as MatchState).morale },
     matchType,
     otPeriodScore: fullReset ? undefined : (init && "otPeriodScore" in init ? { ...(init as MatchState).otPeriodScore! } : undefined),
-    bots: ensureFreshStats(createBots(setup, map, round)),
+    bots: ensureFreshStats(createBots(setupNorm, map, round)),
     bombDroppedAt: null,
     defuseKitDrops: [],
     weaponDrops: [],
@@ -315,16 +336,16 @@ export const createMatchState = (
     pendingResumeAfterRound: false,
     pendingRoundAdvance: null,
     logs: [
-      `${setup.teamAName} ${redStrategy} | ${setup.teamBName} ${bluStrategy}`,
-      `Execucao ${trLabel}: site ${siteLabel} (~${Math.round(sitePos.x)}, ${Math.round(sitePos.y)})`,
-      `${ctLabel} comeca como CT · ${trLabel} como TR · meio-tempo no round 7.`,
+      `${setupNorm.teamAName} ${redStrategy} | ${setupNorm.teamBName} ${bluStrategy}`,
+      `Execucao ${redRoleLabel}: site ${siteLabel} (~${Math.round(sitePos.x)}, ${Math.round(sitePos.y)})`,
+      `${bluRoleLabel} comeca no papel BLU (defesa) · ${redRoleLabel} no papel RED (ataque) · meio-tempo no round 7.`,
       "Partida pronta. Clique em Iniciar partida para simular."
     ],
     strategyHistory,
     strategyWeights,
     customRedStrategies,
     customBluStrategies,
-    activeTrStrategyKey: redStrategy,
-    activeCtStrategyKey: bluStrategy
+    activeRedSideStrategyKey: redStrategy,
+    activeBluSideStrategyKey: bluStrategy
   };
 };

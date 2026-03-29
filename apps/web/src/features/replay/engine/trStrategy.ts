@@ -1,12 +1,12 @@
 /**
- * Estratégia TR por round: rush, split, slow, default.
+ * Estratégia do papel RED (ataque) por round: rush, split, slow, default.
  * Depende de economia, armamento, placar e round (pistol vs full buy).
  * Pesos aprendidos + emergentes (combinações).
  */
 import { weaponKind } from "../ui/weaponIcons";
 import type { Bot, MatchState, RedStrategy } from "../types";
 import { TEAM_ECO_AVG_THRESHOLD } from "./economyConstants";
-import { FIRST_ROUND_SECOND_HALF, getCtTeamFromState, getTrTeamFromState } from "./matchConstants";
+import { FIRST_ROUND_SECOND_HALF, getBluSideTeamFromState, getRedSideTeamFromState } from "./matchConstants";
 import {
   ALL_RED_STRATEGY_KEYS,
   DEFAULT_STRATEGY_WEIGHT,
@@ -15,9 +15,9 @@ import {
   weightedPick
 } from "./strategyLearning";
 
-export type TrStrategyChoice = {
+export type RedSideStrategyChoice = {
   strategy: RedStrategy;
-  trStrategyKey: string;
+  redSideStrategyKey: string;
   isEmergent: boolean;
 };
 
@@ -25,10 +25,10 @@ const isRedStrategy = (s: string): s is RedStrategy =>
   (ALL_RED_STRATEGY_KEYS as string[]).includes(s);
 
 const trAliveCount = (state: MatchState) =>
-  state.bots.filter((b) => b.team === getTrTeamFromState(state) && b.hp > 0).length;
+  state.bots.filter((b) => b.team === getRedSideTeamFromState(state) && b.hp > 0).length;
 
 const ctAliveCount = (state: MatchState) =>
-  state.bots.filter((b) => b.team === getCtTeamFromState(state) && b.hp > 0).length;
+  state.bots.filter((b) => b.team === getBluSideTeamFromState(state) && b.hp > 0).length;
 
 function createEmergentTrCombo(state: MatchState): string | null {
   ensureRoomForNewEmergentCustom(state.customRedStrategies, state.round);
@@ -57,15 +57,15 @@ function createEmergentTrCombo(state: MatchState): string | null {
   return id;
 }
 
-function resolveTrPickFromKey(state: MatchState, key: string, isEmergent: boolean): TrStrategyChoice {
+function resolveTrPickFromKey(state: MatchState, key: string, isEmergent: boolean): RedSideStrategyChoice {
   const custom = state.customRedStrategies.find((c) => c.id === key);
   if (custom && !custom.archivedAtRound) {
-    return { strategy: custom.baseType, trStrategyKey: key, isEmergent };
+    return { strategy: custom.baseType, redSideStrategyKey: key, isEmergent };
   }
   if (isRedStrategy(key)) {
-    return { strategy: key, trStrategyKey: key, isEmergent: false };
+    return { strategy: key, redSideStrategyKey: key, isEmergent: false };
   }
-  return { strategy: "default", trStrategyKey: "default", isEmergent: false };
+  return { strategy: "default", redSideStrategyKey: "default", isEmergent: false };
 }
 
 function lastHistory(state: MatchState) {
@@ -81,7 +81,7 @@ function trHadBombPlantPreviousRound(state: MatchState): boolean {
 function lastTrRoundWasFakeAndLost(state: MatchState): boolean {
   const prev = lastHistory(state);
   if (!prev) return false;
-  const trTeam = getTrTeamFromState(state);
+  const trTeam = getRedSideTeamFromState(state);
   return prev.redStrategy === "fake" && prev.winner !== trTeam;
 }
 
@@ -91,9 +91,9 @@ function applyTrContextWeights(
   trBots: Bot[]
 ): Record<string, number> {
   const w = { ...base };
-  const trAlive = state.lastRoundEndAlive?.tr ?? trAliveCount(state);
-  const ctAlive = state.lastRoundEndAlive?.ct ?? ctAliveCount(state);
-  if (ctAlive > 0 && trAlive > ctAlive) {
+  const redAlive = state.lastRoundEndAlive?.redSide ?? trAliveCount(state);
+  const bluAlive = state.lastRoundEndAlive?.bluSide ?? ctAliveCount(state);
+  if (bluAlive > 0 && redAlive > bluAlive) {
     w.rush = (w.rush ?? 1) + 0.3;
   }
   if (trHadBombPlantPreviousRound(state)) {
@@ -111,16 +111,16 @@ function applyTrContextWeights(
 }
 
 /**
- * Escolhe estratégia de ataque TR para o round.
+ * Escolhe estratégia do papel RED (ataque) para o round.
  */
-export function chooseRedStrategyForRound(state: MatchState, trBots: Bot[]): TrStrategyChoice {
+export function chooseRedStrategyForRound(state: MatchState, trBots: Bot[]): RedSideStrategyChoice {
   const { round, score } = state;
-  const trTeam = getTrTeamFromState(state);
-  const ctTeam = getCtTeamFromState(state);
+  const trTeam = getRedSideTeamFromState(state);
+  const ctTeam = getBluSideTeamFromState(state);
   const trScore = score[trTeam];
   const ctScore = score[ctTeam];
 
-  if (trBots.length === 0) return { strategy: "default", trStrategyKey: "default", isEmergent: false };
+  if (trBots.length === 0) return { strategy: "default", redSideStrategyKey: "default", isEmergent: false };
 
   const igl = trBots.find((b) => b.displayRole === "IGL" || b.role === "IGL");
 
@@ -128,9 +128,9 @@ export function chooseRedStrategyForRound(state: MatchState, trBots: Bot[]): TrS
   const rifles = trBots.filter((b) => weaponKind(b.primaryWeapon) !== "pistol").length;
   const isPistolRound = round === 1 || round === FIRST_ROUND_SECOND_HALF;
 
-  const finish = (strategy: RedStrategy): TrStrategyChoice => ({
+  const finish = (strategy: RedStrategy): RedSideStrategyChoice => ({
     strategy,
-    trStrategyKey: strategy,
+    redSideStrategyKey: strategy,
     isEmergent: false
   });
 
@@ -198,7 +198,7 @@ export function chooseRedStrategyForRound(state: MatchState, trBots: Bot[]): TrS
         }
         return state.strategyWeights.RED[k] ?? DEFAULT_STRATEGY_WEIGHT;
       },
-      state.activeTrStrategyKey,
+      state.activeRedSideStrategyKey,
       0.3
     );
 

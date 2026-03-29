@@ -2,14 +2,14 @@
  * Compra no inicio do round e deteccao de "save" (eco) para IA.
  */
 import { weaponKind } from "../ui/weaponIcons";
-import type { ArmorLoadout, Bot, MatchState, PlayerRole, TeamSide } from "../types";
+import type { ArmorLoadout, Bot, MatchState, PlayerRole, StartsAsSide, TeamSide } from "../types";
 import {
   HELMET_HEADSHOT_REDUCTION,
   SNIPER_HELMET_HEADSHOT_REDUCTION
 } from "./combatConstants";
 import {
-  CT_ECO_TEAM_AVG_THRESHOLD,
-  CT_SAVE_BOT_MONEY_CAP,
+  BLU_SIDE_ECO_TEAM_AVG_THRESHOLD,
+  BLU_SIDE_SAVE_BOT_MONEY_CAP,
   PRICE_AWP,
   PRICE_DEFUSE_KIT,
   PRICE_FAMAS,
@@ -26,10 +26,10 @@ import {
 } from "./economyConstants";
 import {
   FIRST_ROUND_SECOND_HALF,
-  getCtTeam,
-  getCtTeamFromState,
-  getTrTeam,
-  getTrTeamFromState,
+  getBluSideTeam,
+  getBluSideTeamFromState,
+  getRedSideTeam,
+  getRedSideTeamFromState,
   REGULATION_MAX_ROUNDS,
   ROUNDS_TO_WIN_MATCH
 } from "./matchConstants";
@@ -38,8 +38,8 @@ import {
 export const isPistolRound = (roundNumber: number) =>
   roundNumber <= 1 || roundNumber === FIRST_ROUND_SECOND_HALF;
 
-const pistolPrimary = (side: TeamSide, roundNumber: number, teamAStartsAs: "CT" | "TR" = "TR") =>
-  side === getTrTeam(roundNumber, teamAStartsAs) ? "Glock-18" : "USP-S";
+const pistolPrimary = (side: TeamSide, roundNumber: number, teamAStartsAs: StartsAsSide = "RED") =>
+  side === getRedSideTeam(roundNumber, teamAStartsAs) ? "Glock-18" : "USP-S";
 
 export const avgTeamMoneyAlive = (bots: Bot[], side: TeamSide) => {
   const list = bots.filter((b) => b.team === side && b.hp > 0);
@@ -81,16 +81,16 @@ export const damageAfterArmor = (
  */
 export const shouldSaveEquipment = (bot: Bot, state: MatchState): boolean => {
   if (state.bombPlanted) return false;
-  if (bot.team === getTrTeamFromState(state) && bot.hasBomb) return false;
+  if (bot.team === getRedSideTeamFromState(state) && bot.hasBomb) return false;
   if (bot.hp <= 0) return false;
   /** Pistol round: seguir estrategia / waypoints normais */
   if (isPistolRound(state.round)) return false;
   /** Comprou arma longa ou SMG — ir jogar o round */
   if (weaponKind(bot.primaryWeapon) !== "pistol") return false;
 
-  if (bot.team === getCtTeamFromState(state)) {
+  if (bot.team === getBluSideTeamFromState(state)) {
     const avg = avgTeamMoneyAlive(state.bots, bot.team);
-    return avg < CT_ECO_TEAM_AVG_THRESHOLD && bot.money <= CT_SAVE_BOT_MONEY_CAP;
+    return avg < BLU_SIDE_ECO_TEAM_AVG_THRESHOLD && bot.money <= BLU_SIDE_SAVE_BOT_MONEY_CAP;
   }
   const avg = avgTeamMoneyAlive(state.bots, bot.team);
   return avg < RED_ECO_TEAM_AVG_THRESHOLD && bot.money <= RED_SAVE_BOT_MONEY_CAP;
@@ -116,10 +116,10 @@ export type RoundPurchaseOptions = {
   /** Se definido e <= 0, ninguem compra kit neste call; em eco o reducer passa 1 e decrementa */
   bluDefuseKitSlotsRemaining?: number;
   economyContext?: EconomyPurchaseContext;
-  /** Qual time comeca CT no 1.º half — para pistola (TR=Glock, CT=USP) */
-  teamAStartsAs?: "CT" | "TR";
-  /** Round 2: TR plantou no r1 mas CT defusou — forcar compra do que der (so round 1–2) */
-  trForceBuyRound2?: boolean;
+  /** Qual roster (time A) comeca no papel BLU no 1.º half — pistola (RED=Glock, BLU=USP) */
+  teamAStartsAs?: StartsAsSide;
+  /** Round 2: papel RED plantou no r1 mas BLU defusou — forcar compra do que der (so round 1–2) */
+  redSideForceBuyRound2?: boolean;
 };
 
 /** Round “importante”: match point, fim de half/regulamento ou jogo apertado perto do fim. */
@@ -156,14 +156,14 @@ const computeAwpEconomyPurchase = (
   let armor: ArmorLoadout = "none";
   let primary = sec;
   let hasDefuseKit = false;
-  const teamAStartsAs = options?.teamAStartsAs ?? "TR";
+  const teamAStartsAs = options?.teamAStartsAs ?? "RED";
 
-  /** Round 2: TR plantou no r1 mas CT defusou — forcar compra do que der (sempre TR = RED armas) */
-  const trForceBuyRound2 =
+  /** Round 2: papel RED plantou no r1 mas BLU defusou — forcar compra (armas do lado RED) */
+  const redSideForceBuyRound2 =
     roundNumber === 2 &&
-    options?.trForceBuyRound2 === true &&
-    side === getTrTeam(roundNumber, teamAStartsAs);
-  if (trForceBuyRound2) {
+    options?.redSideForceBuyRound2 === true &&
+    side === getRedSideTeam(roundNumber, teamAStartsAs);
+  if (redSideForceBuyRound2) {
     if (m >= PRICE_AK) {
       primary = "AK-47";
       m -= PRICE_AK;
@@ -202,7 +202,7 @@ const computeAwpEconomyPurchase = (
   };
 
   const tryKit = () => {
-    if (side !== getCtTeam(roundNumber, teamAStartsAs) || hasDefuseKit || m < PRICE_DEFUSE_KIT) return;
+    if (side !== getBluSideTeam(roundNumber, teamAStartsAs) || hasDefuseKit || m < PRICE_DEFUSE_KIT) return;
     const slots = options?.bluDefuseKitSlotsRemaining;
     if (slots !== undefined && slots <= 0) return;
     hasDefuseKit = true;
@@ -421,7 +421,7 @@ export const computeRoundPurchase = (
   options?: RoundPurchaseOptions
 ): RoundPurchase => {
   const side = bot.team;
-  const teamAStartsAs = options?.teamAStartsAs ?? "TR";
+  const teamAStartsAs = options?.teamAStartsAs ?? "RED";
   const sec = pistolPrimary(side, roundNumber, teamAStartsAs);
   let m = moneyAfterIncome;
   let armor: ArmorLoadout = "none";
@@ -447,11 +447,11 @@ export const computeRoundPurchase = (
   const wonPistolOrCanBuy = isRoundAfterPistol && (teamAvg >= 3000 || canAffordSmgOrBetter);
   /** Full buy round 2: melhor arma primaria possivel + colete/capacete com o que sobrar */
   const wonPistolRound = isRoundAfterPistol && teamAvg >= 3000;
-  /** Round 2: TR plantou no r1 mas CT defusou — forcar compra do que der (so round 1–2) */
-  const trForceBuyRound2 =
+  /** Round 2: papel RED plantou no r1 mas BLU defusou — forcar compra do que der (so round 1–2) */
+  const redSideForceBuyRound2 =
     roundNumber === 2 &&
-    options?.trForceBuyRound2 === true &&
-    side === getTrTeam(roundNumber, teamAStartsAs);
+    options?.redSideForceBuyRound2 === true &&
+    side === getRedSideTeam(roundNumber, teamAStartsAs);
 
   if (bot.role === "AWP") {
     const ecoCtx: EconomyPurchaseContext = options?.economyContext ?? {
@@ -479,7 +479,7 @@ export const computeRoundPurchase = (
     m < 3800 &&
     !isPistolRound(roundNumber) &&
     !wonPistolOrCanBuy &&
-    !trForceBuyRound2 &&
+    !redSideForceBuyRound2 &&
     !(teamAvg >= TEAM_ECO_AVG_THRESHOLD && botCanAffordRifle);
 
   const tryArmor = () => {
@@ -492,9 +492,9 @@ export const computeRoundPurchase = (
     }
   };
 
-  /** Kit de desarme (400$): CT com saldo apos compras — defuse 5s. Limite global em eco via options. */
+  /** Kit de desarme (400$): roster no papel BLU com saldo apos compras — defuse ~5s. Limite global em eco via options. */
   const tryKit = () => {
-    if (side !== getCtTeam(roundNumber, teamAStartsAs) || hasDefuseKit || m < PRICE_DEFUSE_KIT) return;
+    if (side !== getBluSideTeam(roundNumber, teamAStartsAs) || hasDefuseKit || m < PRICE_DEFUSE_KIT) return;
     const slots = options?.bluDefuseKitSlotsRemaining;
     if (slots !== undefined && slots <= 0) return;
     hasDefuseKit = true;
@@ -542,8 +542,8 @@ export const computeRoundPurchase = (
     return { primaryWeapon: primary, secondaryWeapon: sec, armor, hasDefuseKit, money: m };
   }
 
-  /** Round 2: TR plantou no r1 mas CT defusou — forcar compra do que der (melhor arma + colete/capacete) */
-  if (trForceBuyRound2) {
+  /** Round 2: forcar compra (melhor arma + colete/capacete) quando redSideForceBuyRound2 */
+  if (redSideForceBuyRound2) {
     if (m >= PRICE_AK) {
       spendWeapon("AK-47", PRICE_AK);
     } else if (m >= PRICE_GALIL) {

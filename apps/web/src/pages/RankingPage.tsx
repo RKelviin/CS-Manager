@@ -53,9 +53,55 @@ function TeamRankingTable({ ranking, colors: c }: { ranking: ApiGlobalRankingIte
   );
 }
 
+function TeamRankingPager(props: {
+  rankingLength: number;
+  rankingTotal: number | null;
+  nextCursor: string | null;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+  colors: typeof colors;
+}) {
+  const { rankingLength, rankingTotal, nextCursor, loadingMore, onLoadMore, colors: c } = props;
+  return (
+    <>
+      {rankingTotal != null && (
+        <p style={{ color: c.textDim, fontSize: 13, marginTop: -24, marginBottom: nextCursor ? 12 : 24 }}>
+          {rankingLength} de {rankingTotal} times
+          {nextCursor ? " — há mais abaixo." : ""}
+        </p>
+      )}
+      {nextCursor != null && (
+        <button
+          type="button"
+          onClick={onLoadMore}
+          disabled={loadingMore}
+          style={{
+            display: "block",
+            marginBottom: 24,
+            padding: "10px 20px",
+            borderRadius: 8,
+            border: `1px solid ${c.border}`,
+            background: c.bgInput,
+            color: c.text,
+            cursor: loadingMore ? "wait" : "pointer",
+            fontWeight: 600
+          }}
+        >
+          {loadingMore ? "Carregando…" : "Carregar mais times"}
+        </button>
+      )}
+    </>
+  );
+}
+
+const TEAM_PAGE_SIZE = 50;
+
 export const RankingPage = () => {
   const { user } = useAuth();
   const [ranking, setRanking] = useState<ApiGlobalRankingItem[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [rankingTotal, setRankingTotal] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [playerRanking, setPlayerRanking] = useState<ApiPlayerRankingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,15 +110,28 @@ export const RankingPage = () => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const promises: Promise<unknown>[] = [rankingApi.getGlobal().then((r) => r.items)];
+    setNextCursor(null);
+    setRankingTotal(null);
+    const promises: Promise<unknown>[] = [
+      rankingApi.getGlobal({ limit: TEAM_PAGE_SIZE }).then((r) => {
+        if (!cancelled) {
+          setRanking(r.items);
+          setNextCursor(r.nextCursor);
+          setRankingTotal(r.total);
+        }
+      })
+    ];
     if (user) {
       promises.push(simulationApi.getPlayerRanking());
     }
     Promise.all(promises)
-      .then(([teamList, playerList]) => {
+      .then((results) => {
         if (!cancelled) {
-          setRanking((teamList as ApiGlobalRankingItem[]) ?? []);
-          setPlayerRanking((playerList as ApiPlayerRankingItem[]) ?? []);
+          if (user && results[1] != null) {
+            setPlayerRanking((results[1] as ApiPlayerRankingItem[]) ?? []);
+          } else {
+            setPlayerRanking([]);
+          }
         }
       })
       .catch((e) => {
@@ -81,8 +140,27 @@ export const RankingPage = () => {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
+
+  const loadMoreTeams = () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    rankingApi
+      .getGlobal({ limit: TEAM_PAGE_SIZE, cursor: nextCursor })
+      .then((r) => {
+        setRanking((prev) => {
+          const seen = new Set(prev.map((x) => x.teamId));
+          const extra = r.items.filter((x) => !seen.has(x.teamId));
+          return [...prev, ...extra];
+        });
+        setNextCursor(r.nextCursor);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Erro ao carregar ranking"))
+      .finally(() => setLoadingMore(false));
+  };
 
   if (!user && !loading && !error) {
     return (
@@ -92,6 +170,14 @@ export const RankingPage = () => {
           Ranking global por rating Elo. Faça login para ver também o ranking de jogadores (K/D/A).
         </p>
         <TeamRankingTable ranking={ranking} colors={colors} />
+        <TeamRankingPager
+          rankingLength={ranking.length}
+          rankingTotal={rankingTotal}
+          nextCursor={nextCursor}
+          loadingMore={loadingMore}
+          onLoadMore={loadMoreTeams}
+          colors={colors}
+        />
       </section>
     );
   }
@@ -124,6 +210,14 @@ export const RankingPage = () => {
 
       <h3 style={{ marginBottom: 12, fontSize: 16, color: colors.text }}>Ranking de times</h3>
       <TeamRankingTable ranking={ranking} colors={colors} />
+      <TeamRankingPager
+        rankingLength={ranking.length}
+        rankingTotal={rankingTotal}
+        nextCursor={nextCursor}
+        loadingMore={loadingMore}
+        onLoadMore={loadMoreTeams}
+        colors={colors}
+      />
 
       <h3 style={{ marginBottom: 12, fontSize: 16, color: colors.text }}>Ranking de jogadores</h3>
       <p style={{ color: colors.textDim, fontSize: 13, margin: "0 0 12px" }}>

@@ -78,7 +78,7 @@ function midPoints(a: Waypoint, b: Waypoint, count: number): Waypoint[] {
   return out;
 }
 
-/** Waypoints válidos (caminháveis) para RED (TR) e BLU (CT) */
+/** Waypoints válidos (caminháveis) para spawn RED (roster) e BLU (roster) */
 export function getMapWaypoints(map: MapData): { red: Waypoint[]; blu: Waypoint[] } {
   const centers = getSiteCenters(map);
   const siteA = centers["site-a"];
@@ -134,7 +134,7 @@ export function getMapWaypoints(map: MapData): { red: Waypoint[]; blu: Waypoint[
   return { red: red.length >= 3 ? red : [siteA, siteB, redBase], blu: blu.length >= 3 ? blu : [siteA, siteB, bluBase] };
 }
 
-/** Sequência rush TR: spawn → site alvo (caminho direto) */
+/** Sequência rush papel RED: spawn → site alvo (caminho direto) */
 export function getRushSequence(map: MapData, site: "site-a" | "site-b"): Waypoint[] {
   const centers = getSiteCenters(map);
   const target = centers[site];
@@ -161,10 +161,10 @@ function perpendicularOffset(a: Waypoint, b: Waypoint, t: number, side: number):
 }
 
 /**
- * Waypoints TR focados em dominar um bombsite.
+ * Waypoints do papel RED focados em dominar um bombsite.
  * Inclui rota direta, flanco esquerdo e flanco direito — todos convergem no site.
  */
-export function getTrWaypointsToSite(map: MapData, site: "site-a" | "site-b"): Waypoint[] {
+export function getRedSideWaypointsToSite(map: MapData, site: "site-a" | "site-b"): Waypoint[] {
   const centers = getSiteCenters(map);
   const target = centers[site];
   const redSpawns = map.spawnPoints?.RED ?? [];

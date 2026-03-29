@@ -22,7 +22,7 @@ import {
   DAMAGE_MEMORY_TICKS,
   panicPenalty,
   getPlantedBombWorldPos,
-  getTrMovementExecuteSite,
+  getRedSideMovementExecuteSite,
   pickCombatVictim
 } from "./situationalBrain";
 import { applyPlayerDecision } from "./playerDecision";
@@ -46,24 +46,25 @@ import {
   PLANT_BONUS,
   ROUND_WIN_BONUS
 } from "./economyConstants";
-import { chooseBluStrategyForRound, getCtSiteForBot } from "./ctStrategy";
+import { chooseBluStrategyForRound, getBluSiteForBot } from "./ctStrategy";
 import { recordRoundStrategyLearning } from "./recordRoundStrategyLearning";
 import { damageAfterArmor } from "./roundBuy";
 import { applyMoraleAfterRound, applyPendingRoundAdvance, snapshotBotsForAdvance } from "./roundAdvance";
 import { clamp, pushLog, timeLabel } from "./matchUtils";
 import {
-  getCtTeamFromState,
-  getTrTeam,
-  getTrTeamFromState,
+  getBluSideTeamFromState,
+  getRedSideTeam,
+  getRedSideTeamFromState,
   OT_MAX_ROUND,
   OT_POINTS_TO_WIN_PERIOD,
   OT_ROUNDS_PER_PERIOD,
+  FIRST_OT_ROUND,
   REGULATION_MAX_ROUNDS,
   ROUNDS_TO_WIN_MATCH,
   ROUNDS_TO_WIN_OT
 } from "./matchConstants";
 import { getWaypointPoolForRole, pickNextRushWaypoint } from "./tacticalPositions";
-import { getMapWaypoints, getTrWaypointsToSite } from "../map/mapWaypoints";
+import { getMapWaypoints, getRedSideWaypointsToSite } from "../map/mapWaypoints";
 import { getSiteCenters } from "../map/mapTypes";
 import type { Bot, MatchEvent, MatchState, TeamSide } from "../types";
 
@@ -111,12 +112,12 @@ const filterNav = (pts: { x: number; y: number }[], pred: (p: { x: number; y: nu
 };
 
 const pickNewTarget = (bot: Bot, state: MatchState) => {
-  const isRed = bot.team === "RED";
+  const isTrSide = bot.team === getRedSideTeamFromState(state);
   const map = mapFor(state);
-  const execSite = isRed ? getTrMovementExecuteSite(state) : (state.tsExecuteSite ?? "site-a");
+  const execSite = isTrSide ? getRedSideMovementExecuteSite(state) : (state.tsExecuteSite ?? "site-a");
 
-  if (isRed) {
-    const sitePool = getTrWaypointsToSite(map as import("../map/mapTypes").MapData, execSite);
+  if (isTrSide) {
+    const sitePool = getRedSideWaypointsToSite(map as import("../map/mapTypes").MapData, execSite);
     const list = sitePool.length >= 4 ? sitePool : NAV_RED_FALLBACK;
     const centers = (map as import("../map/mapTypes").MapData).zones?.some((z) => z.id === "site-a")
       ? getSiteCenters(map as import("../map/mapTypes").MapData)
@@ -149,7 +150,7 @@ const pickNewTarget = (bot: Bot, state: MatchState) => {
 
     const rolePool = getWaypointPoolForRole(pool, bot, state.redStrategy, true);
     const effectivePool = rolePool.length > 0 ? rolePool : pool;
-    const trTeam = getTrTeamFromState(state);
+    const trTeam = getRedSideTeamFromState(state);
     const allies = state.bots.filter((b) => b.team === trTeam && b.hp > 0 && b.id !== bot.id);
     const avgAlly = allies.length > 0
       ? { x: allies.reduce((s, a) => s + a.x, 0) / allies.length, y: allies.reduce((s, a) => s + a.y, 0) / allies.length }
@@ -189,7 +190,7 @@ const pickNewTarget = (bot: Bot, state: MatchState) => {
   {
     const slot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
     const execSite = state.tsExecuteSite ?? "site-a";
-    const ctSite = getCtSiteForBot(slot, state.bluStrategy, execSite, state.bombPlantSite);
+    const ctSite = getBluSiteForBot(slot, state.bluStrategy, execSite, state.bombPlantSite);
 
     switch (state.bluStrategy) {
       case "aggressive":
@@ -230,19 +231,19 @@ const pickNewTarget = (bot: Bot, state: MatchState) => {
   const rolePool = getWaypointPoolForRole(
     pool,
     bot,
-    isRed ? state.redStrategy : state.bluStrategy,
-    isRed
+    isTrSide ? state.redStrategy : state.bluStrategy,
+    isTrSide
   );
   const effectivePool = rolePool.length > 0 ? rolePool : pool;
 
   const bluSlot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
-  const ctSite = getCtSiteForBot(bluSlot, state.bluStrategy, execSite, state.bombPlantSite);
+  const ctSite = getBluSiteForBot(bluSlot, state.bluStrategy, execSite, state.bombPlantSite);
   const scoreWaypoint = (p: { x: number; y: number }) => {
     let s = 0.5 + Math.random() * 0.5;
     if (centers) {
       const dExec = Math.hypot(p.x - centers[execSite].x, p.y - centers[execSite].y);
       const dOther = Math.hypot(p.x - centers[execSite === "site-a" ? "site-b" : "site-a"].x, p.y - centers[execSite === "site-a" ? "site-b" : "site-a"].y);
-      if (isRed) {
+      if (isTrSide) {
         s += 80 / (dExec + 30);
       } else {
         const dCtSite = Math.hypot(p.x - centers[ctSite].x, p.y - centers[ctSite].y);
@@ -269,19 +270,19 @@ const MOVE_SPEED = 4.5;
 const ARRIVE_DIST = 48;
 const BOMB_PICKUP_RADIUS = 48;
 
-const isCtPostPlant = (bot: Bot, state: MatchState) =>
-  Boolean(state.bombPlanted && state.bombPlantSite && bot.team === getCtTeamFromState(state) && bot.hp > 0);
+const isBluSidePostPlant = (bot: Bot, state: MatchState) =>
+  Boolean(state.bombPlanted && state.bombPlantSite && bot.team === getBluSideTeamFromState(state) && bot.hp > 0);
 
-const isTrPostPlant = (bot: Bot, state: MatchState) =>
-  Boolean(state.bombPlanted && state.bombPlantSite && bot.team === getTrTeamFromState(state) && bot.hp > 0);
+const isRedSidePostPlant = (bot: Bot, state: MatchState) =>
+  Boolean(state.bombPlanted && state.bombPlantSite && bot.team === getRedSideTeamFromState(state) && bot.hp > 0);
 
-/** TR focado em plantar ou recuperar C4: portador, escolta ou indo buscar bomba — não trocar alvo ao chegar */
-const isTrPlantPriority = (bot: Bot, state: MatchState) => {
-  if (bot.team !== getTrTeamFromState(state) || bot.hp <= 0) return false;
+/** Papel RED focado em plantar ou recuperar C4: portador, escolta ou indo buscar bomba — não trocar alvo ao chegar */
+const isRedSidePlantPriority = (bot: Bot, state: MatchState) => {
+  if (bot.team !== getRedSideTeamFromState(state) || bot.hp <= 0) return false;
   if (bot.hasBomb) return true;
   if (state.bombPlanted) return false;
   if (state.bombDroppedAt) return true;
-  const carrier = state.bots.find((b) => b.team === getTrTeamFromState(state) && b.hasBomb && b.hp > 0);
+  const carrier = state.bots.find((b) => b.team === getRedSideTeamFromState(state) && b.hasBomb && b.hp > 0);
   return !!carrier;
 };
 
@@ -312,8 +313,8 @@ const botTargetIsWeaponUpgradeDrop = (bot: Bot, state: MatchState): boolean => {
 
 /** Distancia "cheguei" ao waypoint: defuse exige entrar no raio da C4; pickup kit tambem */
 const arriveDistForBot = (bot: Bot, state: MatchState): number => {
-  if (isCtPostPlant(bot, state)) {
-    /** Defuse: chegar bem dentro de DEFUSE_RADIUS (28px) para garantir que o CT inicie o defuse */
+  if (isBluSidePostPlant(bot, state)) {
+    /** Defuse: chegar bem dentro de DEFUSE_RADIUS (28px) para garantir que o defensor (papel BLU) inicie o defuse */
     if (ctTargetIsBomb(bot, state)) return Math.min(ARRIVE_DIST, DEFUSE_RADIUS - 10);
     if (ctTargetIsKitDrop(bot, state)) return Math.min(ARRIVE_DIST, DEFUSE_KIT_DROP_PICKUP_RADIUS - 6);
   }
@@ -321,17 +322,17 @@ const arriveDistForBot = (bot: Bot, state: MatchState): number => {
   return ARRIVE_DIST;
 };
 
-/** Fila circular: TR0, CT0, TR1, CT1, ..., TR4, CT4. Rotação por round: startIndex = (round - 1) % 10 */
+/** Fila circular: RED0, BLU0, RED1, BLU1, ... (por slot). Rotação por round: startIndex = (round - 1) % 10 */
 const getBotBySlot = (bots: Bot[], team: TeamSide, slot: number): Bot | undefined =>
   bots.find((b) => b.team === team && (parseInt(b.id.split("-")[1] ?? "0", 10) % 5) === slot);
 
 /**
- * Ordem por tick: fila circular TR1, CT1, TR2, CT2, ..., TR5, CT5.
+ * Ordem por tick: fila circular por slot (papel RED e BLU alternados).
  * A cada início de round a fila avança: o 2.º passa a ser 1.º.
  */
 export const getDecisionOrder = (state: MatchState): Bot[] => {
-  const trTeam = getTrTeamFromState(state);
-  const ctTeam = getCtTeamFromState(state);
+  const trTeam = getRedSideTeamFromState(state);
+  const ctTeam = getBluSideTeamFromState(state);
   const { bots } = state;
 
   const queue: Bot[] = [];
@@ -390,12 +391,12 @@ const moveBots = (state: MatchState, order: Bot[]) => {
     const dist = Math.hypot(dx, dy);
     if (dist < arriveDist) {
       /** Pos-plant: alvo vem do situacional — nao trocar por waypoint aleatorio */
-      if (isCtPostPlant(bot, state) || isTrPostPlant(bot, state)) {
+      if (isBluSidePostPlant(bot, state) || isRedSidePostPlant(bot, state)) {
         syncNavToGoal(mapFor(state), bot, arriveDist);
         continue;
       }
-      /** TR prioridade plant: portador ou escolta permanecem no alvo (site/formacao) */
-      if (isTrPlantPriority(bot, state)) {
+      /** Papel RED prioridade plant: portador ou escolta permanecem no alvo (site/formacao) */
+      if (isRedSidePlantPriority(bot, state)) {
         syncNavToGoal(mapFor(state), bot, arriveDist);
         continue;
       }
@@ -424,7 +425,7 @@ const moveBots = (state: MatchState, order: Bot[]) => {
       const stuckThreshold = (state.mapData?.walls?.length ?? 0) > 12 ? 10 : 14;
       if (bot.navStuckTicks >= stuckThreshold) {
         bot.navStuckTicks = 0;
-        if (!isCtPostPlant(bot, state) && !isTrPostPlant(bot, state) && !isTrPlantPriority(bot, state)) {
+        if (!isBluSidePostPlant(bot, state) && !isRedSidePostPlant(bot, state) && !isRedSidePlantPriority(bot, state)) {
           pickNewTarget(bot, state);
         }
         syncNavToGoal(mapFor(state), bot, arriveDistForBot(bot, state));
@@ -502,7 +503,7 @@ const pickupBomb = (state: MatchState) => {
   if (state.bombPlanted) return;
   if (!state.bombDroppedAt) return;
   const { x, y } = state.bombDroppedAt;
-  const trTeam = getTrTeamFromState(state);
+  const trTeam = getRedSideTeamFromState(state);
   const trsAlive = state.bots
     .filter((b) => b.team === trTeam && b.hp > 0)
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -525,7 +526,7 @@ const runCombat = (state: MatchState, order: Bot[]) => {
     /** Plantando ou defusando: nao pode atirar (acao ja abortada em processBombPhase se houver inimigo) */
     const isPlanting =
       !state.bombPlanted &&
-      attacker.team === getTrTeamFromState(state) &&
+      attacker.team === getRedSideTeamFromState(state) &&
       attacker.hasBomb &&
       state.plantProgressMs > 0;
     const isDefusing = state.defuserId === attacker.id && state.defuseProgressMs > 0;
@@ -609,11 +610,11 @@ const runCombat = (state: MatchState, order: Bot[]) => {
         }
       }
       pushLog(state, `[${timeLabel(state.timeLeftMs)}] ${attacker.name} eliminou ${victim.name}`);
-      if (victim.hasBomb && victim.team === getTrTeamFromState(state)) {
+      if (victim.hasBomb && victim.team === getRedSideTeamFromState(state)) {
         victim.hasBomb = false;
         state.bombDroppedAt = { x: victim.x, y: victim.y };
       }
-      if (victim.team === getCtTeamFromState(state) && victim.hasDefuseKit) {
+      if (victim.team === getBluSideTeamFromState(state) && victim.hasDefuseKit) {
         victim.hasDefuseKit = false;
         if (!Array.isArray(state.defuseKitDrops)) state.defuseKitDrops = [];
         state.defuseKitDrops.push({ x: victim.x, y: victim.y });
@@ -660,7 +661,7 @@ const resolveRound = (state: MatchState, winner: TeamSide, cause: string) => {
 
   applyMoraleAfterRound(state, winner);
 
-  const isOvertime = state.round >= REGULATION_MAX_ROUNDS;
+  const isOvertime = state.round >= FIRST_OT_ROUND;
   const isCompetitiveOt = state.matchType === "tournament" && isOvertime;
 
   if (isCompetitiveOt) {
@@ -690,9 +691,8 @@ const resolveRound = (state: MatchState, winner: TeamSide, cause: string) => {
       );
       return;
     }
-    const otRoundsInPeriod =
-      (state.round - REGULATION_MAX_ROUNDS) % OT_ROUNDS_PER_PERIOD;
-    if (otRoundsInPeriod === 3) {
+    const completedOtRounds = state.round - FIRST_OT_ROUND + 1;
+    if (completedOtRounds > 0 && completedOtRounds % OT_ROUNDS_PER_PERIOD === 0) {
       const r = state.otPeriodScore!.RED;
       const b = state.otPeriodScore!.BLU;
       if (r === 2 && b === 2) {
@@ -774,7 +774,7 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
       if (
         current &&
         current.hp > 0 &&
-        current.team === getCtTeamFromState(state) &&
+        current.team === getBluSideTeamFromState(state) &&
         Math.hypot(current.x - bombPos.x, current.y - bombPos.y) < DEFUSE_RADIUS
       ) {
         defuser = current;
@@ -783,7 +783,7 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
     if (!defuser) {
       for (const b of order) {
         if (
-          b.team === getCtTeamFromState(state) &&
+          b.team === getBluSideTeamFromState(state) &&
           b.hp > 0 &&
           Math.hypot(b.x - bombPos.x, b.y - bombPos.y) < DEFUSE_RADIUS
         ) {
@@ -816,7 +816,7 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
           );
         }
         if (state.defuseProgressMs >= need) {
-          const ctTeam = getCtTeamFromState(state);
+          const ctTeam = getBluSideTeamFromState(state);
           for (const b of state.bots) {
             if (b.team === ctTeam) {
               b.money = clamp(b.money + DEFUSE_BONUS, 0, MAX_MONEY);
@@ -833,14 +833,14 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
 
     state.postPlantTimeLeftMs = Math.max(0, state.postPlantTimeLeftMs - deltaMs);
     if (state.postPlantTimeLeftMs <= 0) {
-      resolveRound(state, getTrTeamFromState(state), "explosao da C4");
+      resolveRound(state, getRedSideTeamFromState(state), "explosao da C4");
     }
     return;
   }
 
-  const trTeam = getTrTeamFromState(state);
+  const trTeam = getRedSideTeamFromState(state);
   const carrier = state.bots.find((b) => b.team === trTeam && b.hp > 0 && b.hasBomb);
-  const trPlantSite = getTrMovementExecuteSite(state);
+  const trPlantSite = getRedSideMovementExecuteSite(state);
   if (carrier && botInSite(mapFor(state), carrier, trPlantSite)) {
     /** Plantando: se vir inimigo, para para atirar (nao pode atirar enquanto planta) */
     const enemies = state.bots.filter((b) => b.team !== carrier.team && b.hp > 0);
@@ -868,13 +868,13 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
         state,
         `[${timeLabel(state.timeLeftMs)}] ${carrier.name} plantou a C4 no site ${trPlantSite === "site-a" ? "A" : "B"}`
       );
-      const ctTeam = getCtTeamFromState(state);
+      const ctTeam = getBluSideTeamFromState(state);
       const ctPick = chooseBluStrategyForRound(
         state,
         state.bots.filter((b) => b.team === ctTeam)
       );
       state.bluStrategy = ctPick.strategy;
-      state.activeCtStrategyKey = ctPick.ctStrategyKey;
+      state.activeBluSideStrategyKey = ctPick.bluSideStrategyKey;
     }
     } else {
       state.plantProgressMs = 0;
@@ -918,8 +918,8 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
     };
     const winner =
       prev.bombPlanted && prev.bombPlantSite
-        ? getTrTeamFromState(prev)
-        : getCtTeamFromState(prev);
+        ? getRedSideTeamFromState(prev)
+        : getBluSideTeamFromState(prev);
     const cause =
       prev.bombPlanted && prev.bombPlantSite ? "C4 plantada (manual)" : "finalizado manualmente";
     resolveRound(state, winner, cause);
@@ -1021,23 +1021,23 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
   const blusAlive = state.bots.filter((b) => b.team === "BLU" && b.hp > 0).length;
   const redAlive = redsAlive > 0;
   const bluAlive = blusAlive > 0;
-  const ctTeam = getCtTeamFromState(state);
-  const trTeam = getTrTeamFromState(state);
+  const ctTeam = getBluSideTeamFromState(state);
+  const trTeam = getRedSideTeamFromState(state);
   const ctsAlive = state.bots.filter((b) => b.team === ctTeam && b.hp > 0).length;
 
   if (!inEndOfRoundSandbox) {
     if (!state.bombPlanted) {
       if (!redAlive) {
-        const cause = trTeam === "RED" ? "eliminacao TR" : "eliminacao CT";
+        const cause = trTeam === "RED" ? "eliminacao RED" : "eliminacao BLU";
         resolveRound(state, "BLU", cause);
       } else if (!bluAlive) {
-        const cause = trTeam === "BLU" ? "eliminacao TR" : "eliminacao CT";
+        const cause = trTeam === "BLU" ? "eliminacao RED" : "eliminacao BLU";
         resolveRound(state, "RED", cause);
       }
-      else if (state.timeLeftMs <= 0) resolveRound(state, ctTeam, "tempo (CT)");
+      else if (state.timeLeftMs <= 0) resolveRound(state, ctTeam, "tempo (BLU)");
     } else {
-      /** C4 plantada: se todos os CTs morrerem, TRs ganham (nao ha quem defuse) */
-      if (ctsAlive === 0) resolveRound(state, trTeam, "eliminacao dos CTs");
+      /** C4 plantada: se todo o papel BLU morrer, papel RED ganha (nao ha quem defuse) */
+      if (ctsAlive === 0) resolveRound(state, trTeam, "eliminacao papel BLU");
     }
   }
 

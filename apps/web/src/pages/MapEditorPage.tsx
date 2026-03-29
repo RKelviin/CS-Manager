@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import type {
   MapData,
   MapInterestPoint,
@@ -65,24 +65,41 @@ export const MapEditorPage = () => {
     y: number;
     label: string;
     watchDeg: string;
-    side: "TR" | "CT" | "both";
+    side: "RED" | "BLU" | "both";
   } | null>(null);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragEnd, setDragEnd] = useState<{ x: number; y: number } | null>(null);
+  /** Arrastar ponto de interesse / spot tático no modo selecionar */
+  const draggingMarkerRef = useRef<{ kind: "interest" | "tactical"; index: number } | null>(null);
+  const [draggingMarker, setDraggingMarker] = useState(false);
+  const [hoverMarkerDrag, setHoverMarkerDrag] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const getCanvasCoords = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const canvasPointFromClient = useCallback(
+    (clientX: number, clientY: number) => {
       const c = canvasRef.current;
       if (!c) return { x: 0, y: 0 };
       const rect = c.getBoundingClientRect();
       const scaleX = map.width / rect.width;
       const scaleY = map.height / rect.height;
       return {
-        x: SNAP((e.clientX - rect.left) * scaleX),
-        y: SNAP((e.clientY - rect.top) * scaleY)
+        x: SNAP((clientX - rect.left) * scaleX),
+        y: SNAP((clientY - rect.top) * scaleY)
       };
     },
+    [map.width, map.height]
+  );
+
+  const getCanvasCoords = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => canvasPointFromClient(e.clientX, e.clientY),
+    [canvasPointFromClient]
+  );
+
+  const clampToMap = useCallback(
+    (x: number, y: number) => ({
+      x: Math.max(0, Math.min(map.width, x)),
+      y: Math.max(0, Math.min(map.height, y))
+    }),
     [map.width, map.height]
   );
 
@@ -216,6 +233,14 @@ export const MapEditorPage = () => {
 
   useEffect(() => draw(), [draw]);
 
+  useEffect(() => {
+    setHoverMarkerDrag(false);
+    if (tool !== "select") {
+      draggingMarkerRef.current = null;
+      setDraggingMarker(false);
+    }
+  }, [tool]);
+
   const hitTest = useCallback(
     (cx: number, cy: number) => {
       const ts = map.tacticalSpots ?? [];
@@ -251,11 +276,63 @@ export const MapEditorPage = () => {
     [map]
   );
 
+  const applyMarkerPosition = useCallback(
+    (clientX: number, clientY: number) => {
+      const drag = draggingMarkerRef.current;
+      if (!drag) return;
+      const raw = canvasPointFromClient(clientX, clientY);
+      const { x: nx, y: ny } = clampToMap(raw.x, raw.y);
+      if (drag.kind === "interest") {
+        setMap((m) => {
+          const list = [...(m.interestPoints ?? [])];
+          const cur = list[drag.index];
+          if (!cur) return m;
+          list[drag.index] = { ...cur, x: nx, y: ny };
+          return { ...m, interestPoints: list };
+        });
+      } else {
+        setMap((m) => {
+          const list = [...(m.tacticalSpots ?? [])];
+          const cur = list[drag.index];
+          if (!cur) return m;
+          list[drag.index] = { ...cur, x: nx, y: ny };
+          return { ...m, tacticalSpots: list };
+        });
+      }
+    },
+    [canvasPointFromClient, clampToMap]
+  );
+
+  useLayoutEffect(() => {
+    if (!draggingMarker) return;
+    const onMove = (e: MouseEvent) => applyMarkerPosition(e.clientX, e.clientY);
+    const onUp = () => {
+      draggingMarkerRef.current = null;
+      setDraggingMarker(false);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [draggingMarker, applyMarkerPosition]);
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const { x, y } = getCanvasCoords(e);
     if (tool === "select") {
       const hit = hitTest(x, y);
       setSelected(hit ? { ...hit } : null);
+      if (hit?.type === "interest" || hit?.type === "tactical") {
+        draggingMarkerRef.current = {
+          kind: hit.type === "interest" ? "interest" : "tactical",
+          index: hit.index
+        };
+        setDraggingMarker(true);
+      } else {
+        draggingMarkerRef.current = null;
+        setDraggingMarker(false);
+      }
       return;
     }
     if (tool === "spawn-red" || tool === "spawn-blu") {
@@ -270,7 +347,7 @@ export const MapEditorPage = () => {
       return;
     }
     if (tool === "interest-point") {
-      setInterestModal({ x, y, type: "angle", side: "CT", aimDeg: "" });
+      setInterestModal({ x, y, type: "angle", side: "BLU", aimDeg: "" });
       return;
     }
     if (tool === "tactical-spot") {
@@ -285,9 +362,20 @@ export const MapEditorPage = () => {
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragStart) setDragEnd(getCanvasCoords(e));
+    if (tool === "select" && !dragStart && !draggingMarker) {
+      const { x: hx, y: hy } = getCanvasCoords(e);
+      const h = hitTest(hx, hy);
+      setHoverMarkerDrag(h?.type === "interest" || h?.type === "tactical");
+    }
+  };
+
+  const endMarkerDrag = () => {
+    draggingMarkerRef.current = null;
+    setDraggingMarker(false);
   };
 
   const handleMouseUp = () => {
+    endMarkerDrag();
     if (!dragStart || !dragEnd) return;
     const x = Math.min(dragStart.x, dragEnd.x);
     const y = Math.min(dragStart.y, dragEnd.y);
@@ -305,11 +393,16 @@ export const MapEditorPage = () => {
       const id = `spawn-${map.zones.filter((z) => z.type === "spawn").length ? "ct" : "t"}`;
       setMap((m) => ({
         ...m,
-        zones: [...m.zones, { id, name: id === "spawn-t" ? "T Spawn" : "CT Spawn", x, y, width, height, type: "spawn" }]
+        zones: [...m.zones, { id, name: id === "spawn-t" ? "RED Spawn" : "BLU Spawn", x, y, width, height, type: "spawn" }]
       }));
     }
     setDragStart(null);
     setDragEnd(null);
+  };
+
+  const handleMouseLeave = () => {
+    setHoverMarkerDrag(false);
+    handleMouseUp();
   };
 
   const deleteSelected = () => {
@@ -387,7 +480,7 @@ export const MapEditorPage = () => {
 
   const exportToFolder = async () => {
     if (map.spawnPoints.RED.length < 5 || map.spawnPoints.BLU.length < 5) {
-      setExportStatus("Adicione 5 spawns TR e 5 spawns CT.");
+      setExportStatus("Adicione 5 spawns RED (roster) e 5 spawns BLU (roster).");
       return;
     }
     const sites = map.zones.filter((z) => z.type === "site");
@@ -418,8 +511,8 @@ export const MapEditorPage = () => {
     { key: "wall", label: "Parede" },
     { key: "zone-site", label: "Site (A/B)" },
     { key: "zone-spawn", label: "Spawn zone" },
-    { key: "spawn-red", label: "+ Spawn TR" },
-    { key: "spawn-blu", label: "+ Spawn CT" },
+    { key: "spawn-red", label: "+ Spawn RED" },
+    { key: "spawn-blu", label: "+ Spawn BLU" },
     { key: "interest-point", label: "Ponto de interesse" },
     { key: "tactical-spot", label: "Spot tático" }
   ];
@@ -448,7 +541,9 @@ export const MapEditorPage = () => {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontSize: 20, fontWeight: 600 }}>Editor de mapas</h1>
       <p style={{ color: "#94a3b8", fontSize: 14 }}>
-        Desenhe paredes (retângulos), zonas de site/spawn e pontos de spawn. Exporte como JSON ou TypeScript.
+        Desenhe paredes (retângulos), zonas de site/spawn e pontos de spawn. Com a ferramenta Selecionar,
+        arraste pontos de interesse e spots táticos para reposicioná-los (grade 10px).
+        Exporte como JSON ou TypeScript.
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
@@ -470,8 +565,8 @@ export const MapEditorPage = () => {
           </button>
         ))}
         <span style={{ marginLeft: 8, color: "#64748b", fontSize: 13 }}>
-          {tool === "spawn-red" && `Spawns TR: ${map.spawnPoints.RED.length}/5`}
-          {tool === "spawn-blu" && `Spawns CT: ${map.spawnPoints.BLU.length}/5`}
+          {tool === "spawn-red" && `Spawns RED: ${map.spawnPoints.RED.length}/5`}
+          {tool === "spawn-blu" && `Spawns BLU: ${map.spawnPoints.BLU.length}/5`}
         </span>
       </div>
 
@@ -554,20 +649,27 @@ export const MapEditorPage = () => {
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
           style={{
             border: "2px solid #334155",
             borderRadius: 8,
             maxWidth: "100%",
-            cursor: tool === "select" ? "default" : "crosshair"
+            cursor:
+              draggingMarker
+                ? "grabbing"
+                : tool === "select" && hoverMarkerDrag
+                  ? "grab"
+                  : tool === "select"
+                    ? "default"
+                    : "crosshair"
           }}
         />
         <div style={{ minWidth: 280, maxWidth: 360, fontSize: 12 }}>
           <h3 style={{ fontSize: 14, marginBottom: 8 }}>Resumo</h3>
           <p style={{ fontSize: 13, color: "#94a3b8" }}>Paredes: {map.walls.length}</p>
           <p style={{ fontSize: 13, color: "#94a3b8" }}>Zonas: {map.zones.length}</p>
-          <p style={{ fontSize: 13, color: "#94a3b8" }}>Spawns TR: {map.spawnPoints.RED.length}/5</p>
-          <p style={{ fontSize: 13, color: "#94a3b8" }}>Spawns CT: {map.spawnPoints.BLU.length}/5</p>
+          <p style={{ fontSize: 13, color: "#94a3b8" }}>Spawns RED: {map.spawnPoints.RED.length}/5</p>
+          <p style={{ fontSize: 13, color: "#94a3b8" }}>Spawns BLU: {map.spawnPoints.BLU.length}/5</p>
           <p style={{ fontSize: 13, color: "#94a3b8" }}>
             Interesse: {(map.interestPoints ?? []).length} · Spots: {(map.tacticalSpots ?? []).length}
           </p>
@@ -608,8 +710,8 @@ export const MapEditorPage = () => {
                     onChange={(e) => patchInterest(i, { side: e.target.value as MapInterestPointSide })}
                     style={inpCompact}
                   >
-                    <option value="TR">TR</option>
-                    <option value="CT">CT</option>
+                    <option value="RED">RED (papel ataque)</option>
+                    <option value="BLU">BLU (papel defesa)</option>
                     <option value="both">both</option>
                   </select>
                   <input
@@ -671,12 +773,12 @@ export const MapEditorPage = () => {
                 <select
                   value={s.side ?? "both"}
                   onChange={(e) =>
-                    patchTactical(i, { side: e.target.value as "TR" | "CT" | "both" })
+                    patchTactical(i, { side: e.target.value as "RED" | "BLU" | "both" })
                   }
                   style={{ ...inpCompact, marginTop: 4 }}
                 >
-                  <option value="TR">TR</option>
-                  <option value="CT">CT</option>
+                  <option value="RED">RED (papel ataque)</option>
+                  <option value="BLU">BLU (papel defesa)</option>
                   <option value="both">both</option>
                 </select>
               </li>
@@ -717,8 +819,8 @@ export const MapEditorPage = () => {
               }
               style={inpCompact}
             >
-              <option value="TR">TR</option>
-              <option value="CT">CT</option>
+              <option value="RED">RED (papel ataque)</option>
+              <option value="BLU">BLU (papel defesa)</option>
               <option value="both">both</option>
             </select>
             <label style={lbl}>Ângulo pré-mira (graus, opcional)</label>
@@ -791,13 +893,13 @@ export const MapEditorPage = () => {
               value={tacticalModal.side}
               onChange={(e) =>
                 setTacticalModal((m) =>
-                  m ? { ...m, side: e.target.value as "TR" | "CT" | "both" } : m
+                  m ? { ...m, side: e.target.value as "RED" | "BLU" | "both" } : m
                 )
               }
               style={inpCompact}
             >
-              <option value="TR">TR</option>
-              <option value="CT">CT</option>
+              <option value="RED">RED (papel ataque)</option>
+              <option value="BLU">BLU (papel defesa)</option>
               <option value="both">both</option>
             </select>
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>

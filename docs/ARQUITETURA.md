@@ -37,8 +37,8 @@ docs/
 
 - **`features/replay/index.ts`** — API pública para páginas: `MatchProvider`, `useMatchContext`, `useMatch`, `matchRegistry`, tipos, domínio de times.
 - **`simulation/`** — contrato do motor: `matchReducer`, `createMatchState`, `SIMULATION_TICK_MS`, avanço de round (`roundAdvance`).
-- **`domain/teamModel.ts`** — documentação e helpers **RED/BLU (roster)** vs **TR/CT (papel por round)**.
-- **`engine/`** — implementação (reducer principal, combate, economia, IA, drops de arma); evoluir em módulos pequenos a partir daqui.
+- **`domain/teamModel.ts`** — documentação e helpers **RED/BLU (roster)** vs **papel RED (ataque) / BLU (defesa) por round**.
+- **`engine/`** — implementação (reducer principal, combate, economia, IA, drops de arma); **`matchConstants.ts`** concentra regulamento, troca de papéis por round e **paletas HUD/mapa** (`getTeamDisplayColor`). Ver `docs/ENGINE.md` (secção HUD e cores).
 - **`state/`** — `matchRegistry` (partidas em background, tick global): `removeEndedMatches`, `removeStaleIdleDuplicates` (evita acumular lobbies 0–0 R1 ao trocar mapa), `subscribeStructural` para listas; `MatchContext` com `cleanupRegistry` e `watchMatch` (URL `?matchId=`, pode mudar para Simulação).
 - **`ui/`** — componentes da partida (`MatchHUD`, `GameCanvas`, `TeamPanel`, …) e **`LiveSpectatorLayout`** (HUD + times + mapa, sem controlos/log); barrel `ui/index.ts`.
 - **`utils/matchRankingLookup.ts`** — cruza nomes de times com o ranking global (`/api/ranking/global`) para ordenação e destaque na página **Partidas ao vivo**.

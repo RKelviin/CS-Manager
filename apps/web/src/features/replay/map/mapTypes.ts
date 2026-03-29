@@ -21,7 +21,7 @@ export type MapSpawnPoint = { x: number; y: number };
 
 export type MapInterestPointType = "angle" | "flank" | "choke" | "cover";
 
-export type MapInterestPointSide = "TR" | "CT" | "both";
+export type MapInterestPointSide = "RED" | "BLU" | "both";
 
 export type MapInterestPoint = {
   id: string;
@@ -33,7 +33,7 @@ export type MapInterestPoint = {
   aimAngle?: number;
 };
 
-export type MapTacticalSpotSide = "TR" | "CT" | "both";
+export type MapTacticalSpotSide = "RED" | "BLU" | "both";
 
 export type MapTacticalSpot = {
   x: number;

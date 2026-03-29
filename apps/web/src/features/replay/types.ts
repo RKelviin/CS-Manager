@@ -1,7 +1,10 @@
 export type TeamSide = "RED" | "BLU";
 
-/** Qual time (A=RED, B=BLU) comeca como CT no 1.º half. O outro comeca TR. */
-export type StartsAsSide = "CT" | "TR";
+/**
+ * Papel inicial do time A (roster RED) na 1.ª metade: lado RED (ataque / C4) ou lado BLU (defesa / kit).
+ * O roster BLU fica no papel oposto.
+ */
+export type StartsAsSide = "RED" | "BLU";
 
 /** Dados opcionais de jogador para simulação (nome, aim e role) */
 export type MatchPlayerData = {
@@ -23,13 +26,13 @@ export type MatchPlayerData = {
 /** Tipo de partida: tournament/league = ranking + overtime; friendly = sem OT, pode empatar. */
 export type MatchType = "tournament" | "friendly";
 
-/** Configuracao da partida: nomes dos times, jogadores e qual comeca como CT. */
+/** Configuracao da partida: nomes dos times, jogadores e papel inicial do time A. */
 export type MatchSetup = {
   teamAName: string;
   teamBName: string;
   teamAPlayers: string[];
   teamBPlayers: string[];
-  /** Time A (RED) comeca como CT ou TR. Default TR. */
+  /** Time A (roster RED) começa no lado RED (ataque) ou BLU (defesa). Default RED. */
   teamAStartsAs: StartsAsSide;
   /** Opcional: atributos dos jogadores do time A (RED). Se 5 itens, sobrescreve aim/role. */
   teamAPlayerData?: MatchPlayerData[];
@@ -48,7 +51,7 @@ export type PlayerRole = "IGL" | "Rifler" | "AWP";
 export type ArmorLoadout = "none" | "vest" | "vest_helmet";
 
 export type RedStrategy = "rush" | "split" | "slow" | "default" | "fake";
-/** CT: default=3-2, stack-a/b=todos em um site, aggressive=push, hold=âncoras, retake=pós-plant */
+/** Lado BLU (defesa): default=3-2, stack-a/b, aggressive, hold, retake, rotate */
 export type BluStrategy = "default" | "stack-a" | "stack-b" | "aggressive" | "hold" | "retake" | "rotate";
 
 export type CustomRedStrategy = {
@@ -74,18 +77,20 @@ export type CustomBluStrategy = {
 
 export type StrategyRoundHistoryEntry = {
   round: number;
-  /** Estratégia exibida no estado (TR) */
+  /** Estratégia do papel RED (ataque) */
   redStrategy: RedStrategy;
-  /** Estratégia exibida no estado (CT) */
+  /** Estratégia do papel BLU (defesa) */
   bluStrategy: BluStrategy;
-  /** Chave para pesos (base ou custom emergente) */
-  trStrategyKey: string;
-  ctStrategyKey: string;
+  /** Chave para pesos do papel RED (base ou custom emergente) */
+  redSideStrategyKey: string;
+  /** Chave para pesos do papel BLU */
+  bluSideStrategyKey: string;
   winner: TeamSide | null;
-  trWon: boolean;
+  /** Vitória do roster que estava no papel RED neste round */
+  redSideWon: boolean;
   hadBombPlanted: boolean;
-  isEmergentTr: boolean;
-  isEmergentCt: boolean;
+  isEmergentRedSide: boolean;
+  isEmergentBluSide: boolean;
 };
 
 export type Bot = {
@@ -120,9 +125,9 @@ export type Bot = {
   money: number;
   primaryWeapon: string;
   secondaryWeapon: string;
-  /** Apenas time RED; um jogador por round */
+  /** Apenas roster no papel RED (ataque); um jogador com C4 */
   hasBomb: boolean;
-  /** CT com kit (visual) */
+  /** Roster no papel BLU: kit de desarme (visual) */
   hasDefuseKit: boolean;
   /** Protecao corporal (economia + combate) */
   armor: ArmorLoadout;
@@ -158,7 +163,7 @@ export type MatchState = {
   /** Nomes dos times (A=RED, B=BLU). Usado na HUD. */
   teamAName: string;
   teamBName: string;
-  /** Qual time comeca como CT no 1.º half. */
+  /** Time A começa no lado RED (ataque) ou BLU (defesa) na 1.ª metade. */
   teamAStartsAs: StartsAsSide;
   round: number;
   timeLeftMs: number;
@@ -179,17 +184,17 @@ export type MatchState = {
   logs: string[];
   /** C4 caida no chao (quando o portador morre); null se ninguem pegou */
   bombDroppedAt: { x: number; y: number } | null;
-  /** Kits de desarme no chao (CT morto com kit); outro CT pode recolher */
+  /** Kits no chão (jogador do papel BLU morto); outro defensor pode recolher */
   defuseKitDrops: { x: number; y: number }[];
   /** Primarias largadas no chao (morte); qualquer time pode recolher se for upgrade */
   weaponDrops: { id: string; x: number; y: number; primaryWeapon: string; angle: number }[];
-  /** Site alvo da execucao T neste round (portador da bomba) */
+  /** Site alvo da execução do lado RED neste round (portador da C4) */
   tsExecuteSite: "site-a" | "site-b";
   /** C4 plantada no site */
   bombPlanted: boolean;
   /** Onde a C4 esta plantada (apos plant) */
   bombPlantSite: "site-a" | "site-b" | null;
-  /** Posicao exata da C4 no mapa apos plant (defuse = CT em cima) */
+  /** Posição da C4 após plant (defuse = jogador do papel BLU no raio) */
   bombPlantWorldPos: { x: number; y: number } | null;
   /** Contagem regressiva ate explosao (apos plant) */
   postPlantTimeLeftMs: number;
@@ -197,7 +202,7 @@ export type MatchState = {
   plantProgressMs: number;
   /** Progresso de defuse no jogador atual */
   defuseProgressMs: number;
-  /** Quem esta defusando (id do bot BLU) */
+  /** Bot que está a defusar (id) */
   defuserId: string | null;
   /** Partida encerrada — time vencedor (null se empate ou partida em andamento) */
   matchWinner: TeamSide | null;
@@ -223,18 +228,18 @@ export type MatchState = {
     /** Bomba ja plantada no momento em que o round foi decidido (para bonus se plantar nos 5s finais) */
     hadBombPlantedAtResolve: boolean;
   } | null;
-  /** Histórico de estratégias TR/CT e resultado por round */
+  /** Histórico de estratégias por papel RED/BLU e resultado por round */
   strategyHistory: StrategyRoundHistoryEntry[];
-  /** Pesos aprendidos: RED pool = chaves TR (rush, custom-*), BLU pool = CT */
+  /** Pesos: pool roster RED = chaves de ataque; pool roster BLU = chaves de defesa */
   strategyWeights: { RED: Record<string, number>; BLU: Record<string, number> };
   customRedStrategies: CustomRedStrategy[];
   customBluStrategies: CustomBluStrategy[];
-  /** Chave usada no round atual para pesos TR (igual a redStrategy se base) */
-  activeTrStrategyKey: string;
-  /** Chave usada no round atual para pesos CT */
-  activeCtStrategyKey: string;
-  /** Vivos TR vs CT no fim do último round resolvido (para pesos contextuais TR no round seguinte) */
-  lastRoundEndAlive?: { tr: number; ct: number };
+  /** Chave atual para pesos do papel RED (ataque) */
+  activeRedSideStrategyKey: string;
+  /** Chave atual para pesos do papel BLU (defesa) */
+  activeBluSideStrategyKey: string;
+  /** Vivos no papel RED vs BLU no fim do último round (contexto para o round seguinte) */
+  lastRoundEndAlive?: { redSide: number; bluSide: number };
 };
 
 export type MatchEvent =

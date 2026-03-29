@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { MatchState } from "../types";
+import { BLU_SIDE_DISPLAY_COLORS, RED_SIDE_DISPLAY_COLORS } from "../engine/matchConstants";
 import { MatchEndScoreboard } from "./MatchEndScoreboard";
 
 const restartBtnStyle: CSSProperties = {
@@ -99,9 +100,9 @@ export const MatchEndOverlay = ({
             Placar final
           </p>
           <p style={{ margin: "8px 0 0", fontSize: 36, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-            <span style={{ color: "#fb923c" }}>{state.teamAName} {state.score.RED}</span>
+            <span style={{ color: RED_SIDE_DISPLAY_COLORS.primary }}>{state.teamAName} {state.score.RED}</span>
             <span style={{ color: "#64748b", fontSize: 24 }}>|</span>
-            <span style={{ color: "#60a5fa" }}>{state.teamBName} {state.score.BLU}</span>
+            <span style={{ color: BLU_SIDE_DISPLAY_COLORS.primary }}>{state.teamBName} {state.score.BLU}</span>
           </p>
 
           <MatchEndScoreboard state={state} />
@@ -157,7 +158,8 @@ export const MatchEndOverlay = ({
   }
 
   const winnerLabel = state.matchWinner === "RED" ? state.teamAName : state.teamBName;
-  const winnerColor = state.matchWinner === "RED" ? "#fb923c" : "#60a5fa";
+  const winnerColor =
+    state.matchWinner === "RED" ? RED_SIDE_DISPLAY_COLORS.primary : BLU_SIDE_DISPLAY_COLORS.primary;
 
   const node = (
     <div
@@ -193,9 +195,9 @@ export const MatchEndOverlay = ({
           Placar final
         </p>
         <p style={{ margin: "8px 0 0", fontSize: 36, fontWeight: 700, fontVariantNumeric: "tabular-nums", display: "flex", alignItems: "center", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-          <span style={{ color: "#fb923c" }}>{state.teamAName} {state.score.RED}</span>
+          <span style={{ color: RED_SIDE_DISPLAY_COLORS.primary }}>{state.teamAName} {state.score.RED}</span>
           <span style={{ color: "#64748b", fontSize: 24 }}>|</span>
-          <span style={{ color: "#60a5fa" }}>{state.teamBName} {state.score.BLU}</span>
+          <span style={{ color: BLU_SIDE_DISPLAY_COLORS.primary }}>{state.teamBName} {state.score.BLU}</span>
         </p>
 
         <MatchEndScoreboard state={state} />

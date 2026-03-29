@@ -30,7 +30,7 @@ export function teamsToMatchSetup(teamA: TeamInput, teamB: TeamInput): MatchSetu
     teamBName: teamB.name,
     teamAPlayers: namesA,
     teamBPlayers: namesB,
-    teamAStartsAs: "TR",
+    teamAStartsAs: "RED",
     teamAPlayerData: playerDataA.length >= 5 ? playerDataA : undefined,
     teamBPlayerData: playerDataB.length >= 5 ? playerDataB : undefined,
     matchType: "tournament"

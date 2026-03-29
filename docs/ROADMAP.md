@@ -48,30 +48,26 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 
 ### Backend
 - Auth, team, market, simulation, maps
-- Betting e stream: rotas stub (retornam status)
+- Apostas: rotas reais (`/api/betting`); stream: gancho de API sem contrato de negócio (MVP de partidas ao vivo no frontend)
 - PostgreSQL, Prisma, migrations
 
 ---
 
 ## ⚠️ Pontos de Atenção Imediatos
 
-### 🔴 Confiabilidade
-- **Sentry ausente:** nenhum erro de runtime é capturado em produção (FE nem BE). Ver `docs/OBSERVABILIDADE.md`.
-- **Sem validação de input (zod):** rotas de `auth`, `team` e `market` aceitam payloads arbitrários.
-- **Erros não padronizados:** `shared/errors.ts` não cobre erros de negócio (saldo insuficiente, time cheio).
-- **Sem rate limiting:** rotas de autenticação estão expostas a força bruta.
+### ✅ Resolvido / alinhado ao código
+Os itens abaixo já estão cobertos nas **Fases 1–3** deste documento (observabilidade, validação, erros, rate limit, UI com tokens, histórico Elo exposto, boosters persistindo `Player`, módulo de apostas). Não repetir aqui o detalhe — ver secções correspondentes.
 
-### 🟡 Performance
-- **`getGlobalRanking` sem cache:** consulta full-scan a cada requisição; sem índice composto `(rating DESC, id)`.
-- **Sem paginação por cursor:** ranking carrega todos os registros de uma vez.
+### 🟡 Pendente — performance e ranking global
+- **`GET /ranking/leagues`:** agrupar times por faixa Bronze/Prata/Ouro/… (planeado na Fase 8).
+- **Job de temporadas:** criação recorrente de `Season` no servidor (Fase 8).
 
-### 🟠 Produto / UX
-- **`UserPage` com valores hardcoded:** não usa o sistema de tokens de `theme/tokens.ts` (viola `docs/UI-CONVENCOES.md`).
-- **Histórico de Elo sem rota exposta:** `rating.service.ts` já implementa o histórico, mas `ranking.routes.ts` não o expõe.
-- **Boosters não persistem jogadores:** ao abrir um booster pack, nenhum `Player` real é criado no banco.
+### 🔵 `/api/stream` vs partidas ao vivo (MVP)
+- O **MVP de partidas ao vivo** (lista + espectador no browser) **não depende** de `**/api/stream`: o estado em tempo real fica no cliente.
+- `GET /api/stream` continua um **gancho** (`{ module, status }`), sem HLS/WebSocket nem fonte server-side de partida — decisão **pós-MVP** quando existir verdade de jogo no servidor. Não confundir com o espectador atual.
 
-### 🔵 Módulos Stub
-- **`/betting`** e **`/stream`** retornam apenas status; nenhuma lógica de negócio implementada.
+### 🔵 Módulo stream (baixa prioridade)
+- Sem investimento imediato: manter stub ou documentar extensão futura; contrato (SSE vs WebSocket) só depois de haver estado de partida no backend.
 
 ---
 
@@ -152,7 +148,7 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 
 ### Fase 4 — Engine: Evolução da Jogabilidade (Novos Mapas e Estratégias) ✅ concluída
 - Adicionar 1 novo mapa built-in (ex: Nuke ou Ancient) seguindo o padrão de `inferno.ts` / `inferno.map.json`, registrando em `mapRegistry.ts`
-- Implementar estratégia TR `fake` em `trStrategy.ts` e CT `rotate` em `ctStrategy.ts`
+- Implementar estratégia papel RED `fake` em `trStrategy.ts` e papel BLU `rotate` em `ctStrategy.ts`
 - Adicionar atributo `morale` (0–100) em `createMatchState.ts`: afeta `composure` após loss streak ≥ 3
 - Expor `morale` no `TeamPanel.tsx`
 
@@ -188,12 +184,11 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 
 ### Fase 8 — Escalabilidade: Performance e Ranking Dinâmico
 
-> ⚠️ Endereça: 🟡 getGlobalRanking sem cache · 🟡 Sem índice composto
+> ⚠️ Endereça: 🟡 performance do ranking global (parcialmente feito — ver abaixo)
 
-- Cursor-based pagination em `getGlobalRanking` + índice composto `(rating DESC, id)` via migration Prisma
-- Cache em memória (TTL 30s) para `getGlobalRanking` e `getRankingPreview`
-- `GET /ranking/leagues`: grupos Bronze/Prata/Ouro/Platina/Diamante/Lendário por faixa de rating
-- Job recorrente em `server.ts` (`setInterval`) para criação automática de nova Season
+- **Feito:** índice em `Team` para `ORDER BY rating DESC, id ASC`; paginação por cursor + `nextCursor` em `GET /ranking/global` (parâmetro `offset` mantido como legado); cache em memória (TTL ~30s) para páginas públicas de `getGlobalRanking` e para `getRankingPreview` quando usado sem `skipCache`.
+- **Pendente:** `GET /ranking/leagues`: grupos Bronze/Prata/Ouro/Platina/Diamante/Lendário por faixa de rating
+- **Pendente:** job recorrente em `server.ts` (`setInterval`) para criação automática de nova Season
 
 ---
 

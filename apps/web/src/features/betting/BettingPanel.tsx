@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { BLU_SIDE_DISPLAY_COLORS, RED_SIDE_DISPLAY_COLORS } from "../replay/engine/matchConstants";
 import { theme } from "../../theme/tokens";
 import { bettingApi, type ApiBet, type ApiMatchOdds } from "../../shared/apiClient";
 
@@ -159,9 +160,9 @@ export function BettingPanel({
                 flex: 1,
                 padding: `${spacing.sm}px ${spacing.md}px`,
                 borderRadius: radii.md,
-                border: `2px solid ${redActive ? "#fb923c" : colors.border}`,
-                background: redActive ? "rgba(251, 146, 60, 0.15)" : colors.bgInput,
-                color: redActive ? "#fb923c" : colors.textMuted,
+                border: `2px solid ${redActive ? RED_SIDE_DISPLAY_COLORS.primary : colors.border}`,
+                background: redActive ? RED_SIDE_DISPLAY_COLORS.bg : colors.bgInput,
+                color: redActive ? RED_SIDE_DISPLAY_COLORS.primary : colors.textMuted,
                 fontWeight: typography.fontWeight.semibold,
                 fontSize: typography.fontSize.sm,
                 cursor: disabled ? "not-allowed" : "pointer",
@@ -178,9 +179,9 @@ export function BettingPanel({
                 flex: 1,
                 padding: `${spacing.sm}px ${spacing.md}px`,
                 borderRadius: radii.md,
-                border: `2px solid ${bluActive ? "#60a5fa" : colors.border}`,
-                background: bluActive ? "rgba(96, 165, 250, 0.12)" : colors.bgInput,
-                color: bluActive ? "#60a5fa" : colors.textMuted,
+                border: `2px solid ${bluActive ? BLU_SIDE_DISPLAY_COLORS.primary : colors.border}`,
+                background: bluActive ? BLU_SIDE_DISPLAY_COLORS.bg : colors.bgInput,
+                color: bluActive ? BLU_SIDE_DISPLAY_COLORS.primary : colors.textMuted,
                 fontWeight: typography.fontWeight.semibold,
                 fontSize: typography.fontSize.sm,
                 cursor: disabled ? "not-allowed" : "pointer",

@@ -2,8 +2,8 @@ import type { MatchState, TeamSide } from "../types";
 import {
   FIRST_ROUND_SECOND_HALF,
   getTeamDisplayColor,
-  getCtTeamFromState,
-  getTrTeamFromState
+  getBluSideTeamFromState,
+  getRedSideTeamFromState
 } from "../engine/matchConstants";
 import { roleLabel } from "../engine/roleCombat";
 import { HpBar } from "./HpBar";
@@ -56,8 +56,10 @@ const BLU_STRAT_LABELS: Record<string, string> = {
   rotate: "Rotate"
 };
 
+/** `redStrategy` / `bluStrategy` no estado são papéis RED (ataque) / BLU (defesa) do round — ver roundAdvance. */
 const strategyLabel = (side: TeamSide, state: MatchState) => {
-  if (side === "RED") return state.redStrategy;
+  const trTeam = getRedSideTeamFromState(state);
+  if (side === trTeam) return state.redStrategy;
   return BLU_STRAT_LABELS[state.bluStrategy] ?? state.bluStrategy;
 };
 
@@ -69,8 +71,8 @@ export const TeamPanel = ({ state, side }: { state: MatchState; side: TeamSide }
 
   const border = getTeamDisplayColor(side, state.round, "border", state.teamAStartsAs);
   const bg = getTeamDisplayColor(side, state.round, "bg", state.teamAStartsAs);
-  const isCt = side === getCtTeamFromState(state);
-  const sideLabel = isCt ? "CT" : "TR";
+  const isBluRole = side === getBluSideTeamFromState(state);
+  const sideLabel = isBluRole ? "BLU" : "RED";
   const showSideLabel = state.round >= FIRST_ROUND_SECOND_HALF;
   const moraleVal = state.morale?.[side] ?? 100;
   const moraleBarColor = moraleVal >= 70 ? "#22c55e" : moraleVal >= 40 ? "#fbbf24" : "#ef4444";
@@ -191,8 +193,8 @@ export const TeamPanel = ({ state, side }: { state: MatchState; side: TeamSide }
               <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500, flexShrink: 0 }}>{bot.displayRole ?? roleLabel(bot.role)}</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 <ArmorLoadoutIcons armor={bot.armor} />
-                {side === getTrTeamFromState(state) && bot.hasBomb && bot.hp > 0 && <CarryC4Icon size={14} />}
-                {side === getCtTeamFromState(state) && bot.hasDefuseKit && bot.hp > 0 && <DefuseKitIcon size={12} />}
+                {side === getRedSideTeamFromState(state) && bot.hasBomb && bot.hp > 0 && <CarryC4Icon size={14} />}
+                {side === getBluSideTeamFromState(state) && bot.hasDefuseKit && bot.hp > 0 && <DefuseKitIcon size={12} />}
               </span>
               <span style={{ color: "#fbbf24", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{moneyFmt(bot.money)}</span>
             </div>
@@ -258,7 +260,7 @@ export const TeamPanel = ({ state, side }: { state: MatchState; side: TeamSide }
             })()}
             <HpBar hp={bot.hp} dead={bot.hp <= 0} />
             <div style={{ color: "#9fb0d9", fontSize: 11, marginTop: 6 }}>
-              {side === getTrTeamFromState(state) && bot.hasBomb && bot.hp > 0 && state.plantProgressMs > 0 && (
+              {side === getRedSideTeamFromState(state) && bot.hasBomb && bot.hp > 0 && state.plantProgressMs > 0 && (
                 <span title="A plantar a C4">Plantando C4</span>
               )}
             </div>

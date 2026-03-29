@@ -1,9 +1,9 @@
 /**
- * Posições táticas por role e estratégia: âncoras CT, formação TR, corredores.
+ * Posições táticas por role e estratégia: âncoras BLU (defesa), formação RED (ataque), corredores.
  */
 import { getRushSequence } from "../map/mapWaypoints";
 import { getSiteCenters, type MapData, type MapInterestPoint } from "../map/mapTypes";
-import { getCtSiteForBot } from "./ctStrategy";
+import { getBluSiteForBot } from "./ctStrategy";
 import type { Bot, MatchState } from "../types";
 
 export type TacticalPoint = { x: number; y: number };
@@ -16,8 +16,8 @@ const jitter = (p: TacticalPoint): TacticalPoint => ({
   y: p.y + (Math.random() - 0.5) * 2 * ANCHOR_JITTER
 });
 
-/** Âncoras CT por site (A ou B) e role. Site = qual site o T vai atacar (tsExecuteSite). */
-const CT_ANCHOR_SITE_A: Record<string, TacticalPoint> = {
+/** Âncoras do papel BLU por site (A ou B) e role. Site = alvo de execução (tsExecuteSite). */
+const BLU_ANCHOR_SITE_A: Record<string, TacticalPoint> = {
   AWP: { x: 150, y: 180 },
   Entry: { x: 400, y: 200 },
   Support: { x: 550, y: 140 },
@@ -26,7 +26,7 @@ const CT_ANCHOR_SITE_A: Record<string, TacticalPoint> = {
   Sniper: { x: 150, y: 180 }
 };
 
-const CT_ANCHOR_SITE_B: Record<string, TacticalPoint> = {
+const BLU_ANCHOR_SITE_B: Record<string, TacticalPoint> = {
   AWP: { x: 650, y: 180 },
   Entry: { x: 400, y: 200 },
   Support: { x: 250, y: 140 },
@@ -39,14 +39,14 @@ const dist2 = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
 
 const interestOk = (p: MapInterestPoint) =>
-  (p.side === "CT" || p.side === "both") && (p.type === "angle" || p.type === "cover");
+  (p.side === "BLU" || p.side === "both") && (p.type === "angle" || p.type === "cover");
 
-/** Posição de âncora para CT. Site conforme estratégia (3-2, stack-a, stack-b). */
-export function getCtHoldPosition(bot: Bot, state: MatchState): TacticalPoint {
+/** Posição de âncora para o papel BLU. Site conforme estratégia (3-2, stack-a, stack-b). */
+export function getBluHoldPosition(bot: Bot, state: MatchState): TacticalPoint {
   const map = state.mapData as MapData | undefined;
   const centers = map ? getSiteCenters(map) : null;
   const slot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
-  const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
+  const site = getBluSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
   const siteCenter = centers ? centers[site] : null;
 
   const roleKey = bot.displayRole ?? (bot.role === "AWP" ? "Sniper" : bot.role === "IGL" ? "IGL" : "Support");
@@ -75,13 +75,13 @@ export function getCtHoldPosition(bot: Bot, state: MatchState): TacticalPoint {
     return jitter({ x: siteCenter.x + offset.x, y: siteCenter.y + offset.y });
   }
 
-  const anchors = (site === "site-a" ? CT_ANCHOR_SITE_A : CT_ANCHOR_SITE_B) as Record<string, TacticalPoint>;
+  const anchors = (site === "site-a" ? BLU_ANCHOR_SITE_A : BLU_ANCHOR_SITE_B) as Record<string, TacticalPoint>;
   const pos = anchors[roleKey] ?? anchors.Support;
   return jitter(pos);
 }
 
-/** Posições de patrulha para CT — pontos no site atribuído conforme estratégia */
-export function getCtHoldPatrolPositions(bot: Bot, state: MatchState): TacticalPoint[] {
+/** Posições de patrulha para o papel BLU — pontos no site atribuído conforme estratégia */
+export function getBluHoldPatrolPositions(bot: Bot, state: MatchState): TacticalPoint[] {
   const map = state.mapData as MapData | undefined;
   const centers = map ? getSiteCenters(map) : null;
   const bluSpawns = map?.spawnPoints?.BLU ?? [];
@@ -89,10 +89,10 @@ export function getCtHoldPatrolPositions(bot: Bot, state: MatchState): TacticalP
     ? { x: bluSpawns.reduce((s, p) => s + p.x, 0) / bluSpawns.length, y: Math.max(...bluSpawns.map((p) => p.y)) + 30 }
     : { x: (map?.width ?? 800) / 2, y: 100 };
 
-  if (!centers) return [getCtHoldPosition(bot, state)];
+  if (!centers) return [getBluHoldPosition(bot, state)];
 
   const slot = parseInt(bot.id.split("-")[1] ?? "0", 10) % 5;
-  const site = getCtSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
+  const site = getBluSiteForBot(slot, state.bluStrategy, state.tsExecuteSite ?? "site-a", state.bombPlantSite);
   const siteCenter = centers[site];
   const offset = (slot - 2) * 35;
 
@@ -103,7 +103,7 @@ export function getCtHoldPatrolPositions(bot: Bot, state: MatchState): TacticalP
   const geo = [choke, nearSite, mid];
   const spots = map?.tacticalSpots ?? [];
   const fromSpots = spots
-    .filter((s) => (s.side ?? "both") === "CT" || (s.side ?? "both") === "both")
+    .filter((s) => (s.side ?? "both") === "BLU" || (s.side ?? "both") === "both")
     .filter((s) => dist2(s, siteCenter) < 260)
     .map((s) => ({ x: s.x, y: s.y }));
 
@@ -118,8 +118,8 @@ export function getCtHoldPatrolPositions(bot: Bot, state: MatchState): TacticalP
   return geo;
 }
 
-/** Offsets de formação TR em relação ao carrier (direção = para o site). Formação mais unida para dominar site. */
-export const TR_FORMATION_OFFSETS: Record<string, { forward: number; lateral: number }> = {
+/** Offsets de formação do papel RED em relação ao carrier (direção = para o site). */
+export const RED_SIDE_FORMATION_OFFSETS: Record<string, { forward: number; lateral: number }> = {
   Entry: { forward: 55, lateral: 0 },
   AWP: { forward: -65, lateral: 45 },
   Support: { forward: 10, lateral: 35 },
@@ -129,7 +129,7 @@ export const TR_FORMATION_OFFSETS: Record<string, { forward: number; lateral: nu
 };
 
 /**
- * Sequências ordenadas de waypoints para rush TR (spawn → site).
+ * Sequências ordenadas de waypoints para rush do papel RED (spawn → site).
  * Cada sequência vai do spawn (alto y) em direção ao site alvo.
  */
 const RUSH_SEQUENCE_A: TacticalPoint[] = [
@@ -181,7 +181,7 @@ export function pickNextRushWaypoint(
   return seq[targetIndex];
 }
 
-/** Filtra waypoints por role. TR: pool já focada no bombsite; roles definem abordagem. */
+/** Filtra waypoints por role. Papel RED: pool já focada no bombsite; roles definem abordagem. */
 export function getWaypointPoolForRole(
   pool: TacticalPoint[],
   bot: { displayRole?: string; role: string; id: string; team: string },

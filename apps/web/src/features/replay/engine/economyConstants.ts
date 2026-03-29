@@ -11,7 +11,7 @@
  * | Full buy após  | 3250+300×kills | 1900–3400     | 300   | 300   | 300    |
  *
  * Eco: TEAM_ECO_AVG < 2300; full buy: AK+colete ≈ 3700, M4+colete ≈ 4100.
- * Save: bot com pouco $ + time em eco = recua ao spawn (CT_SAVE_BOT_MONEY_CAP).
+ * Save: bot com pouco $ + time em eco = recua ao spawn (BLU_SIDE_SAVE_BOT_MONEY_CAP).
  */
 /** Pistol round — todos comecam com o mesmo patamar */
 export const START_MONEY = 800;
@@ -25,10 +25,10 @@ export const LOSS_BONUS_TIERS = [2100, 2650, 3200, 3750] as const;
 /** Por eliminacao na rodada (aplicado imediatamente ao matar) */
 export const KILL_REWARD = 300;
 
-/** Bonus para todo o time TR quando a C4 e plantada (aplicado imediatamente) */
+/** Bonus para todo o time no papel RED (ataque) quando a C4 e plantada (aplicado imediatamente) */
 export const PLANT_BONUS = 300;
 
-/** Bonus para todo o time CT quando a C4 e defusada (aplicado imediatamente) */
+/** Bonus para todo o time no papel BLU (defesa) quando a C4 e defusada (aplicado imediatamente) */
 export const DEFUSE_BONUS = 300;
 
 /** Bonus se a C4 for plantada nos ~5s de "jogo livre" apos o round ja decidido (antes do proximo round) */
@@ -36,10 +36,10 @@ export const END_OF_ROUND_SANDBOX_PLANT_BONUS = 300;
 
 export const MAX_MONEY = 16000;
 
-/** CT: media do time abaixo disso = tendencia a save (eco) */
-export const CT_ECO_TEAM_AVG_THRESHOLD = 2100;
-/** CT: jogador com saldo baixo + time em eco = prioriza guardar equip no spawn */
-export const CT_SAVE_BOT_MONEY_CAP = 1850;
+/** Papel BLU: media do time abaixo disso = tendencia a save (eco) */
+export const BLU_SIDE_ECO_TEAM_AVG_THRESHOLD = 2100;
+/** Papel BLU: jogador com saldo baixo + time em eco = prioriza guardar equip no spawn */
+export const BLU_SIDE_SAVE_BOT_MONEY_CAP = 1850;
 
 /** RED: mesma logica de save */
 export const RED_ECO_TEAM_AVG_THRESHOLD = 2200;
@@ -48,16 +48,16 @@ export const RED_SAVE_BOT_MONEY_CAP = 1950;
 /** Media do time abaixo disso = considerado "eco" para compras em grupo */
 export const TEAM_ECO_AVG_THRESHOLD = 2300;
 
-/** Bomba: tempo restante (ms) abaixo do qual forcar retake/defuse — CTs vaem antes que falte 10s (defuse ~10s) */
+/** Bomba: tempo restante (ms) abaixo do qual forcar retake/defuse — defesa age antes que falte ~10s */
 export const POST_PLANT_FORCE_RETAKE_MS = 25000;
-/** CTs em vantagem numerica: avancar ainda mais cedo (ms restantes para considerar "urgente") */
+/** Defesa em vantagem numerica: avancar ainda mais cedo (ms restantes para considerar "urgente") */
 export const POST_PLANT_ADVANTAGE_RETAKE_MS = 30000;
 
 // --- Precos (CS aproximado) ---
 export const PRICE_AK = 2700;
 export const PRICE_GALIL = 1800;
 export const PRICE_MAC10 = 1050;
-/** SMG CT (eco do AWPer) */
+/** SMG papel BLU (eco do AWPer) */
 export const PRICE_MP9 = 1250;
 export const PRICE_M4A4 = 3100;
 export const PRICE_FAMAS = 2050;

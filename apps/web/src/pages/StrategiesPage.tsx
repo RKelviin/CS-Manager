@@ -31,9 +31,9 @@ function weightEvolutionForKey(
   const pts: { round: number; weight: number }[] = [{ round: 0, weight: 1 }];
   let w = 1;
   for (const h of history) {
-    const used = side === "RED" ? h.trStrategyKey : h.ctStrategyKey;
+    const used = side === "RED" ? h.redSideStrategyKey : h.bluSideStrategyKey;
     if (used !== key) continue;
-    const won = side === "RED" ? h.trWon : !h.trWon;
+    const won = side === "RED" ? h.redSideWon : !h.redSideWon;
     w = clampW(w + (won ? 0.15 : -0.08));
     pts.push({ round: h.round, weight: w });
   }
@@ -46,7 +46,7 @@ export const StrategiesPage = () => {
   const { state } = useMatch(watchedId);
   const [sideFilter, setSideFilter] = useState<SideFilter>("all");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
-  /** `${side}::${key}` — default existe em TR e CT */
+  /** `${side}::${key}` — default existe nos pools RED e BLU */
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [reactivateNotice, setReactivateNotice] = useState<string | null>(null);
 
@@ -65,9 +65,9 @@ export const StrategiesPage = () => {
       let wins = 0;
       let losses = 0;
       for (const h of hist) {
-        const used = side === "RED" ? h.trStrategyKey : h.ctStrategyKey;
+        const used = side === "RED" ? h.redSideStrategyKey : h.bluSideStrategyKey;
         if (used !== key) continue;
-        const won = side === "RED" ? h.trWon : !h.trWon;
+        const won = side === "RED" ? h.redSideWon : !h.redSideWon;
         if (won) wins++;
         else losses++;
       }
@@ -153,7 +153,7 @@ export const StrategiesPage = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: spacing.lg }}>
-      <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Estratégias (TR / CT)</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Estratégias (RED / BLU)</h1>
       <p style={{ color: colors.textMuted, margin: 0, fontSize: 14 }}>
         Estatísticas e pesos aprendidos da partida em foco. Escolha uma partida na Simulação (matchId na URL) ou
         inicie uma nova.
@@ -197,8 +197,8 @@ export const StrategiesPage = () => {
                 style={selectStyle}
               >
                 <option value="all">Todos</option>
-                <option value="RED">TR (pool RED)</option>
-                <option value="BLU">CT (pool BLU)</option>
+                <option value="RED">Papel RED (ataque)</option>
+                <option value="BLU">Papel BLU (defesa)</option>
               </select>
             </label>
             <label style={{ fontSize: 13 }}>
@@ -272,7 +272,7 @@ export const StrategiesPage = () => {
                       background: selectedRowId === rowId ? "rgba(99,102,241,0.08)" : undefined
                     }}
                   >
-                    <td style={tdStyle}>{r.side === "RED" ? "TR" : "CT"}</td>
+                    <td style={tdStyle}>{r.side === "RED" ? "RED" : "BLU"}</td>
                     <td style={tdStyle}>
                       <button
                         type="button"

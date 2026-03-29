@@ -272,7 +272,7 @@ export async function persistMatchResult(matchId: string, body: PersistMatchBody
   }
 
   const updatedMatch = await getMatchById(matchId);
-  const rankingPreview = await getRankingPreview();
+  const rankingPreview = await getRankingPreview(5, { skipCache: true });
 
   return {
     match: updatedMatch,

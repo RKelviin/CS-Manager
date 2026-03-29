@@ -6,7 +6,7 @@ import type {
   RedStrategy,
   TeamSide
 } from "../types";
-import { getTrTeamFromState } from "./matchConstants";
+import { getRedSideTeamFromState } from "./matchConstants";
 
 export const ALL_RED_STRATEGY_KEYS: RedStrategy[] = ["rush", "split", "slow", "default", "fake"];
 export const ALL_BLU_STRATEGY_KEYS: BluStrategy[] = [
@@ -19,10 +19,10 @@ export const ALL_BLU_STRATEGY_KEYS: BluStrategy[] = [
   "rotate"
 ];
 
-/** Máximo de estratégias custom / emergentes ativas (não arquivadas) por pool TR ou CT */
+/** Máximo de estratégias custom / emergentes ativas por pool (roster RED ou BLU) */
 export const ACTIVE_CUSTOM_STRATEGY_CAP = 5;
 
-/** Bases CT válidas para combinar emergentes em contexto pré-plant (exclui retake) */
+/** Bases do papel BLU válidas para emergentes em contexto pré-plant (exclui retake) */
 export const BLU_BASE_KEYS_PRE_PLANT_EMERGENT: BluStrategy[] = [
   "default",
   "stack-a",
@@ -129,7 +129,7 @@ export function clampStrategyWeight(w: number): number {
   return Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, w));
 }
 
-/** Bump weight for key in side pool (RED = TR strats, BLU = CT strats). */
+/** Bump weight for key no pool do roster (RED = chaves de ataque, BLU = chaves de defesa). */
 export function bumpStrategyWeight(
   state: MatchState,
   side: "RED" | "BLU",
@@ -165,27 +165,27 @@ export function weightedPick<T extends string>(
   return pick;
 }
 
-export function trWonRound(state: MatchState, winner: TeamSide): boolean {
-  return winner === getTrTeamFromState(state);
+export function redSideWonRound(state: MatchState, winner: TeamSide): boolean {
+  return winner === getRedSideTeamFromState(state);
 }
 
-export function countTrEmergentConsecutiveWins(state: MatchState, trKey: string): number {
+export function countRedSideEmergentConsecutiveWins(state: MatchState, key: string): number {
   let n = 0;
   for (let i = state.strategyHistory.length - 1; i >= 0; i--) {
     const h = state.strategyHistory[i]!;
-    if (h.trStrategyKey !== trKey) break;
-    if (h.trWon) n++;
+    if (h.redSideStrategyKey !== key) break;
+    if (h.redSideWon) n++;
     else break;
   }
   return n;
 }
 
-export function countCtEmergentConsecutiveWins(state: MatchState, ctKey: string): number {
+export function countBluSideEmergentConsecutiveWins(state: MatchState, key: string): number {
   let n = 0;
   for (let i = state.strategyHistory.length - 1; i >= 0; i--) {
     const h = state.strategyHistory[i]!;
-    if (h.ctStrategyKey !== ctKey) break;
-    if (!h.trWon) n++;
+    if (h.bluSideStrategyKey !== key) break;
+    if (!h.redSideWon) n++;
     else break;
   }
   return n;

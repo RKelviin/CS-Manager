@@ -102,6 +102,7 @@ export type ApiGlobalRankingItem = {
 export type ApiGlobalRankingResponse = {
   items: ApiGlobalRankingItem[];
   total: number;
+  nextCursor: string | null;
 };
 
 export type ApiTeamRatingHistoryItem = {
@@ -158,9 +159,38 @@ export const simulationApi = {
   getPlayerRanking: () => api.get<ApiPlayerRankingItem[]>("simulation/ranking/players")
 };
 
+export type RankingGlobalQuery = {
+  limit?: number;
+  /** @deprecated Prefer `cursor`. */
+  offset?: number;
+  cursor?: string | null;
+};
+
 export const rankingApi = {
-  getGlobal: (limit = 100, offset = 0) =>
-    api.get<ApiGlobalRankingResponse>(`ranking/global?limit=${limit}&offset=${offset}`),
+  getGlobal: (opts: RankingGlobalQuery = {}) => {
+    const params = new URLSearchParams();
+    const limit = opts.limit ?? 100;
+    params.set("limit", String(limit));
+    if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+    if (opts.cursor) params.set("cursor", opts.cursor);
+    const q = params.toString();
+    return api.get<ApiGlobalRankingResponse>(`ranking/global?${q}`);
+  },
+  /** Fetches global ranking pages until `nextCursor` is exhausted or `maxItems` is reached. */
+  getGlobalAll: async (maxItems = 500) => {
+    const items: ApiGlobalRankingItem[] = [];
+    let cursor: string | undefined;
+    while (items.length < maxItems) {
+      const page = await rankingApi.getGlobal({
+        limit: 100,
+        ...(cursor ? { cursor } : {})
+      });
+      items.push(...page.items);
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+    return items;
+  },
   getTeamHistory: (teamId: string) =>
     api.get<ApiTeamRatingHistoryResponse>(`ranking/teams/${teamId}/history`)
 };

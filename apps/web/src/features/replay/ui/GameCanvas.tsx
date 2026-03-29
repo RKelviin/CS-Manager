@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { DEFUSE_KIT_MS, DEFUSE_NO_KIT_MS, PLANT_TIME_MS } from "../engine/bombConstants";
-import { getTeamDisplayColor, getTrTeamFromState } from "../engine/matchConstants";
+import { getTeamDisplayColor, getRedSideTeamFromState } from "../engine/matchConstants";
 import { getWeaponFovForRole, getWeaponRangeForRole } from "../engine/roleCombat";
 import { getPlantedBombWorldPos } from "../engine/situationalBrain";
 import { BOT_RADIUS, unobstructedRayDistance } from "../map/dust2Map";
@@ -206,11 +206,13 @@ export const GameCanvas = ({ state }: { state: MatchState }) => {
       ctx.arc(x, y, BOT_RADIUS, 0, Math.PI * 2);
       ctx.fillStyle = getTeamDisplayColor(team, state.round, "dot", state.teamAStartsAs);
       ctx.fill();
-      ctx.strokeStyle = inCombat ? "#ff4444" : "#fff";
+      ctx.strokeStyle = inCombat
+        ? getTeamDisplayColor(team, state.round, "primary", state.teamAStartsAs)
+        : "#fff";
       ctx.lineWidth = inCombat ? 3.5 : 1.5;
       ctx.stroke();
 
-      if (team === getTrTeamFromState(state) && hasBomb) {
+      if (team === getRedSideTeamFromState(state) && hasBomb) {
         drawMiniC4BadgeOnPlayer(ctx, x, y);
       }
 
@@ -241,10 +243,10 @@ export const GameCanvas = ({ state }: { state: MatchState }) => {
 
     if (state.plantProgressMs > 0) {
       const carrier = state.bots.find(
-        (b) => b.team === getTrTeamFromState(state) && b.hasBomb && b.hp > 0
+        (b) => b.team === getRedSideTeamFromState(state) && b.hasBomb && b.hp > 0
       );
       if (carrier) {
-        drawCircularProgress(carrier.x, carrier.y, state.plantProgressMs / PLANT_TIME_MS, "#fb923c");
+        drawCircularProgress(carrier.x, carrier.y, state.plantProgressMs / PLANT_TIME_MS, "#ef4444");
       }
     } else if (state.bombPlanted && state.bombPlantSite && state.defuseProgressMs > 0 && state.defuserId) {
       const defuser = state.bots.find((b) => b.id === state.defuserId);

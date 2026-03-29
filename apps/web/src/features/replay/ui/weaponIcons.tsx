@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { getTrTeamFromState } from "../engine/matchConstants";
+import { getRedSideTeamFromState } from "../engine/matchConstants";
 import { BOT_RADIUS } from "../map/dust2Map";
 import type { ArmorLoadout, Bot, MatchState, TeamSide } from "../types";
 
@@ -51,7 +51,7 @@ export function hudMapWeaponKindFromPrimaryWeapon(weapon: string): HudMapWeaponK
 
 export function getHudMapWeaponKind(bot: Bot, state: MatchState): HudMapWeaponKind {
   const isPlanting =
-    bot.team === getTrTeamFromState(state) && bot.hasBomb && bot.hp > 0 && !state.bombPlanted && state.plantProgressMs > 0;
+    bot.team === getRedSideTeamFromState(state) && bot.hasBomb && bot.hp > 0 && !state.bombPlanted && state.plantProgressMs > 0;
   if (isPlanting) return "c4";
   return hudMapWeaponKindFromPrimaryWeapon(bot.primaryWeapon);
 }
@@ -426,7 +426,7 @@ export const ArmorLoadoutIcons = ({
   );
 };
 
-/** C4 no inventário (TR) — ao lado do colete/capacete quando é portador */
+/** C4 no inventário (papel RED) — ao lado do colete/capacete quando é portador */
 export const CarryC4Icon = ({
   size = 14,
   style
@@ -466,7 +466,7 @@ export const CarryC4Icon = ({
   );
 };
 
-/** Kit de desarme (CT) — ao lado do colete/cap no painel (discreto) */
+/** Kit de desarme (papel BLU) — ao lado do colete/cap no painel (discreto) */
 export const DefuseKitIcon = ({
   size = 12,
   style
@@ -701,7 +701,7 @@ const strokeKitMini = (ctx: CanvasRenderingContext2D) => {
 };
 
 /**
- * HUD no mapa: colete, capacete (se houver) e kit CT — fila centrada abaixo do nome/HP.
+ * HUD no mapa: colete, capacete (se houver) e kit (papel BLU) — fila centrada abaixo do nome/HP.
  */
 export function drawArmorKitOnCanvas(
   ctx: CanvasRenderingContext2D,

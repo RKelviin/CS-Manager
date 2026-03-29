@@ -1,5 +1,5 @@
 /**
- * Estratégia CT por round: defensão dos bombsites.
+ * Estratégia do papel BLU (defesa) por round: bombsites.
  * Depende de economia, armamento e placar.
  * Pesos aprendidos + emergentes.
  */
@@ -7,7 +7,7 @@ import { weaponKind } from "../ui/weaponIcons";
 import type { BluStrategy, Bot, MatchState } from "../types";
 import { TEAM_ECO_AVG_THRESHOLD } from "./economyConstants";
 import { ROUNDS_TO_WIN_MATCH } from "./matchConstants";
-import { getCtTeamFromState } from "./matchConstants";
+import { getBluSideTeamFromState } from "./matchConstants";
 import {
   ALL_BLU_STRATEGY_KEYS,
   BLU_BASE_KEYS_PRE_PLANT_EMERGENT,
@@ -17,9 +17,9 @@ import {
   weightedPick
 } from "./strategyLearning";
 
-export type CtStrategyChoice = {
+export type BluSideStrategyChoice = {
   strategy: BluStrategy;
-  ctStrategyKey: string;
+  bluSideStrategyKey: string;
   isEmergent: boolean;
 };
 
@@ -37,7 +37,7 @@ function createEmergentCtCombo(state: MatchState): string | null {
   let guard = 0;
   while (b === a && guard++ < 8) b = pool[Math.floor(Math.random() * pool.length)]!;
 
-  const id = `emergent-ct-${a}-${b}-r${state.round}`;
+  const id = `emergent-blu-${a}-${b}-r${state.round}`;
   if (state.customBluStrategies.some((c) => c.id === id)) return null;
 
   const name = `${a} + ${b}`;
@@ -53,15 +53,15 @@ function createEmergentCtCombo(state: MatchState): string | null {
   return id;
 }
 
-function resolveCtPickFromKey(state: MatchState, key: string, isEmergent: boolean): CtStrategyChoice {
+function resolveCtPickFromKey(state: MatchState, key: string, isEmergent: boolean): BluSideStrategyChoice {
   const custom = state.customBluStrategies.find((c) => c.id === key);
   if (custom && !custom.archivedAtRound) {
-    return { strategy: custom.baseType, ctStrategyKey: key, isEmergent };
+    return { strategy: custom.baseType, bluSideStrategyKey: key, isEmergent };
   }
   if (isBluStrategy(key)) {
-    return { strategy: key, ctStrategyKey: key, isEmergent: false };
+    return { strategy: key, bluSideStrategyKey: key, isEmergent: false };
   }
-  return { strategy: "default", ctStrategyKey: "default", isEmergent: false };
+  return { strategy: "default", bluSideStrategyKey: "default", isEmergent: false };
 }
 
 function lastHistory(state: MatchState) {
@@ -80,17 +80,17 @@ function trUsedFakeLastRound(state: MatchState): boolean {
 }
 
 /**
- * Escolhe estratégia de defesa CT para o round.
+ * Escolhe estratégia do papel BLU (defesa) para o round.
  */
-export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): CtStrategyChoice {
+export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): BluSideStrategyChoice {
   const { score, round, tsExecuteSite } = state;
-  const ctTeam = getCtTeamFromState(state);
+  const ctTeam = getBluSideTeamFromState(state);
   const ctScore = score[ctTeam];
   const trScore = score[ctTeam === "RED" ? "BLU" : "RED"];
 
-  const finish = (strategy: BluStrategy): CtStrategyChoice => ({
+  const finish = (strategy: BluStrategy): BluSideStrategyChoice => ({
     strategy,
-    ctStrategyKey: strategy,
+    bluSideStrategyKey: strategy,
     isEmergent: false
   });
 
@@ -180,11 +180,12 @@ export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): CtS
       }
       return state.strategyWeights.BLU[k] ?? DEFAULT_STRATEGY_WEIGHT;
     },
-    state.activeCtStrategyKey,
+    state.activeBluSideStrategyKey,
     0.25
   );
 
-  const isEmergent = pickKey.startsWith("emergent-ct-");
+  const isEmergent =
+    pickKey.startsWith("emergent-blu-") || pickKey.startsWith("emergent-ct-");
   const choice = resolveCtPickFromKey(state, pickKey, isEmergent);
   if (!state.bombPlanted && choice.strategy === "retake") {
     return finish("default");
@@ -192,8 +193,8 @@ export function chooseBluStrategyForRound(state: MatchState, ctBots: Bot[]): CtS
   return choice;
 }
 
-/** Site que o CT deve defender conforme estratégia e slot (0-4) */
-export function getCtSiteForBot(
+/** Site que o papel BLU deve defender conforme estratégia e slot (0-4) */
+export function getBluSiteForBot(
   slot: number,
   strategy: BluStrategy,
   tsExecuteSite: "site-a" | "site-b",
@@ -211,8 +212,8 @@ export function getCtSiteForBot(
   return tsExecuteSite;
 }
 
-/** CT em estratégia de defesa (não aggressive/retake) — vai ao site atribuído */
-export function isCtDefendStrategy(strategy: BluStrategy): boolean {
+/** Papel BLU em estratégia de defesa (não aggressive/retake) — vai ao site atribuído */
+export function isBluSideDefendStrategy(strategy: BluStrategy): boolean {
   return (
     strategy === "default" ||
     strategy === "stack-a" ||

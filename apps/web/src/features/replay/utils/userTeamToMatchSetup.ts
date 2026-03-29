@@ -54,7 +54,7 @@ export const userTeamToMatchSetup = (
     teamBName: opponentName,
     teamAPlayers: playerData.length >= 5 ? playerData.map((p) => p.name) : ["RED-1", "RED-2", "RED-3", "RED-4", "RED-5"],
     teamBPlayers: ["BOT-1", "BOT-2", "BOT-3", "BOT-4", "BOT-5"],
-    teamAStartsAs: "TR",
+    teamAStartsAs: "RED",
     teamAPlayerData: playerData.length >= 5 ? playerData : undefined,
     teamBPlayerData
   };

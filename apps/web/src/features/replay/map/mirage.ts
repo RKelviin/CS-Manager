@@ -103,7 +103,7 @@ export const MIRAGE_MAP: MapData = {
     },
     {
       "id": "spawn-t",
-      "name": "T Spawn",
+      "name": "RED Spawn",
       "x": 300,
       "y": 500,
       "width": 200,
@@ -112,7 +112,7 @@ export const MIRAGE_MAP: MapData = {
     },
     {
       "id": "spawn-ct",
-      "name": "CT Spawn",
+      "name": "BLU Spawn",
       "x": 300,
       "y": 20,
       "width": 200,
@@ -168,18 +168,18 @@ export const MIRAGE_MAP: MapData = {
   },
   "interestPoints": [
     { "id": "mir-a-ramp", "x": 560, "y": 200, "type": "angle", "side": "both", "aimAngle": -1.0 },
-    { "id": "mir-jungle", "x": 480, "y": 140, "type": "choke", "side": "CT", "aimAngle": 1.2 },
+    { "id": "mir-jungle", "x": 480, "y": 140, "type": "choke", "side": "BLU", "aimAngle": 1.2 },
     { "id": "mir-mid", "x": 400, "y": 300, "type": "choke", "side": "both", "aimAngle": -1.5 },
-    { "id": "mir-b-short", "x": 220, "y": 200, "type": "flank", "side": "TR", "aimAngle": 0.8 },
-    { "id": "mir-site-a", "x": 700, "y": 100, "type": "cover", "side": "CT", "aimAngle": 1.4 },
-    { "id": "mir-site-b", "x": 100, "y": 100, "type": "cover", "side": "CT", "aimAngle": 0.2 }
+    { "id": "mir-b-short", "x": 220, "y": 200, "type": "flank", "side": "RED", "aimAngle": 0.8 },
+    { "id": "mir-site-a", "x": 700, "y": 100, "type": "cover", "side": "BLU", "aimAngle": 1.4 },
+    { "id": "mir-site-b", "x": 100, "y": 100, "type": "cover", "side": "BLU", "aimAngle": 0.2 }
   ],
   "tacticalSpots": [
     { "x": 520, "y": 180, "watchAngle": -0.9, "label": "A-ramp", "side": "both" },
-    { "x": 450, "y": 120, "watchAngle": 1.3, "label": "jungle", "side": "CT" },
+    { "x": 450, "y": 120, "watchAngle": 1.3, "label": "jungle", "side": "BLU" },
     { "x": 400, "y": 260, "watchAngle": 1.5, "label": "mid-window", "side": "both" },
     { "x": 200, "y": 160, "watchAngle": 0.6, "label": "B-apps", "side": "both" },
-    { "x": 680, "y": 105, "watchAngle": -0.3, "label": "A-site", "side": "CT" },
-    { "x": 400, "y": 470, "watchAngle": -1.4, "label": "T-spawn", "side": "TR" }
+    { "x": 680, "y": 105, "watchAngle": -0.3, "label": "A-site", "side": "BLU" },
+    { "x": 400, "y": 470, "watchAngle": -1.4, "label": "RED-spawn", "side": "RED" }
   ]
 };

@@ -1,7 +1,7 @@
 import {
   FIRST_ROUND_SECOND_HALF,
   getTeamDisplayColor,
-  getTrTeamFromState
+  getRedSideTeamFromState
 } from "../engine/matchConstants";
 import type { MatchState } from "../types";
 
@@ -23,7 +23,7 @@ export const bombLineShort = (state: MatchState): string => {
   if (state.bombPlanted && state.bombPlantSite) {
     return "c4 plantada";
   }
-  const carrier = state.bots.find((b) => b.team === getTrTeamFromState(state) && b.hasBomb && b.hp > 0);
+  const carrier = state.bots.find((b) => b.team === getRedSideTeamFromState(state) && b.hasBomb && b.hp > 0);
   if (carrier && state.plantProgressMs > 0) {
     return "plantando c4";
   }
@@ -32,7 +32,7 @@ export const bombLineShort = (state: MatchState): string => {
   return "c4 em jogo";
 };
 
-/** Estrutura padrao: placar | tempo | vivos | bomba. Cores TR/CT invertem no round 7 (2.º half). */
+/** Estrutura padrao: placar | tempo | vivos | bomba. Cores por papel RED/BLU invertem no round 7 (2.º half). */
 export const MatchHUD = ({ state }: { state: MatchState }) => {
   const aliveRed = countAlive(state, "RED");
   const aliveBlu = countAlive(state, "BLU");
@@ -57,7 +57,7 @@ export const MatchHUD = ({ state }: { state: MatchState }) => {
         boxShadow: "0 4px 14px rgba(0,0,0,0.25)"
       }}
     >
-      {/* Placar: Team A | score | Team B — cores invertem no 2.º half (TR laranja, CT azul) */}
+      {/* Placar: Team A | score | Team B — cores invertem no 2.º half (papel RED vermelho, BLU azul) */}
       <div
         style={{
           display: "grid",
@@ -102,7 +102,7 @@ export const MatchHUD = ({ state }: { state: MatchState }) => {
         </span>
       </div>
 
-      {/* 2.º tempo: indica troca de lados (cores TR/CT ja invertidas) */}
+      {/* 2.º tempo: indica troca de lados (cores papel RED/BLU ja invertidas) */}
       {isSecondHalf && (
         <div
           style={{
@@ -131,7 +131,7 @@ export const MatchHUD = ({ state }: { state: MatchState }) => {
         {formatTime(timerMs)}
       </div>
 
-      {/* Players vivos — cores por lado atual (TR/CT) */}
+      {/* Players vivos — cores por papel atual (RED/BLU) */}
       <div
         style={{
           display: "flex",

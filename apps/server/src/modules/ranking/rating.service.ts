@@ -4,6 +4,30 @@
  * actual: 1 win, 0.5 draw, 0 loss
  */
 import { prisma } from "../../db/index.js";
+import { decodeRankingCursor, encodeRankingCursor } from "./ranking.cursor.js";
+
+const RANKING_CACHE_TTL_MS = 30_000;
+
+type GlobalRankingCacheEntry = { expires: number; value: GlobalRankingResult };
+
+const globalRankingCache = new Map<string, GlobalRankingCacheEntry>();
+
+type RankingPreviewRow = { position: number; teamId: string; teamName: string; rating: number };
+
+const previewCache = new Map<string, { expires: number; value: RankingPreviewRow[] }>();
+
+function takeCachedGlobal(key: string): GlobalRankingResult | undefined {
+  const e = globalRankingCache.get(key);
+  if (!e || Date.now() > e.expires) {
+    if (e) globalRankingCache.delete(key);
+    return undefined;
+  }
+  return e.value;
+}
+
+function putCachedGlobal(key: string, value: GlobalRankingResult): void {
+  globalRankingCache.set(key, { expires: Date.now() + RANKING_CACHE_TTL_MS, value });
+}
 
 const INITIAL_RATING = 1500;
 const K_TOURNAMENT_MULTIPLIER = 1.5;
@@ -137,23 +161,91 @@ export type GlobalRankingItem = {
   matchesPlayed: number;
 };
 
-/** Global ranking ordered by rating (descending). */
-export async function getGlobalRanking(limit = 100, offset = 0): Promise<{
+export type GlobalRankingResult = {
   items: GlobalRankingItem[];
   total: number;
-}> {
-  const [teams, total] = await Promise.all([
-    prisma.team.findMany({
-      orderBy: { rating: "desc" },
+  /** Opaque cursor for the next page (`GET ...?cursor=`), or null when there are no more rows. */
+  nextCursor: string | null;
+};
+
+export type GetGlobalRankingParams = {
+  limit?: number;
+  /** @deprecated Prefer `cursor`. When greater than zero, uses `skip`/`take` (not cached). */
+  offset?: number;
+  cursor?: string | null;
+  /** When true, bypasses cache (e.g. after a rating change). */
+  skipCache?: boolean;
+};
+
+const rankingOrderBy = [{ rating: "desc" as const }, { id: "asc" as const }];
+const teamRankingSelect = { id: true, name: true, rating: true, matchesPlayed: true } as const;
+
+/** Global ranking ordered by rating (descending), then `id` (ascending) for a stable order. */
+export async function getGlobalRanking(params: GetGlobalRankingParams = {}): Promise<GlobalRankingResult> {
+  const limit = Math.min(100, Math.max(1, params.limit ?? 100));
+  const skipCache = params.skipCache ?? false;
+  const offset = Math.max(0, params.offset ?? 0);
+  const useLegacyOffset = offset > 0;
+  const cursorRaw = params.cursor?.trim() || null;
+  const cursorDecoded = cursorRaw ? decodeRankingCursor(cursorRaw) : null;
+
+  if (cursorRaw && !cursorDecoded) {
+    throw new Error("Invalid ranking cursor");
+  }
+
+  const cacheKeyHead = `g:${limit}:head`;
+  const cacheKeyCursor = cursorRaw ? `g:${limit}:c:${cursorRaw}` : null;
+
+  if (!skipCache && !useLegacyOffset && !cursorRaw) {
+    const hit = takeCachedGlobal(cacheKeyHead);
+    if (hit) return hit;
+  }
+  if (!skipCache && cacheKeyCursor && cursorDecoded) {
+    const hit = takeCachedGlobal(cacheKeyCursor);
+    if (hit) return hit;
+  }
+
+  const total = await prisma.team.count();
+
+  let teams: Array<{ id: string; name: string; rating: number; matchesPlayed: number }>;
+  let firstPosition: number;
+
+  if (cursorDecoded && !useLegacyOffset) {
+    const cr = cursorDecoded.rating;
+    const cid = cursorDecoded.id;
+    const countBefore = await prisma.team.count({
+      where: {
+        OR: [{ rating: { gt: cr } }, { AND: [{ rating: cr }, { id: { lt: cid } }] }]
+      }
+    });
+    firstPosition = countBefore + 1;
+    teams = await prisma.team.findMany({
+      where: {
+        OR: [{ rating: { lt: cr } }, { AND: [{ rating: cr }, { id: { gt: cid } }] }]
+      },
+      orderBy: rankingOrderBy,
+      take: limit,
+      select: teamRankingSelect
+    });
+  } else if (useLegacyOffset) {
+    teams = await prisma.team.findMany({
+      orderBy: rankingOrderBy,
       skip: offset,
       take: limit,
-      select: { id: true, name: true, rating: true, matchesPlayed: true }
-    }),
-    prisma.team.count()
-  ]);
+      select: teamRankingSelect
+    });
+    firstPosition = offset + 1;
+  } else {
+    teams = await prisma.team.findMany({
+      orderBy: rankingOrderBy,
+      take: limit,
+      select: teamRankingSelect
+    });
+    firstPosition = 1;
+  }
 
-  const items = teams.map((t, i) => ({
-    position: offset + i + 1,
+  const items: GlobalRankingItem[] = teams.map((t, i) => ({
+    position: firstPosition + i,
     teamId: t.id,
     teamName: t.name,
     rating: t.rating,
@@ -161,21 +253,46 @@ export async function getGlobalRanking(limit = 100, offset = 0): Promise<{
     matchesPlayed: t.matchesPlayed
   }));
 
-  return { items, total };
+  const last = teams[teams.length - 1];
+  const nextCursor =
+    teams.length === limit && last ? encodeRankingCursor({ rating: last.rating, id: last.id }) : null;
+
+  const result: GlobalRankingResult = { items, total, nextCursor };
+
+  if (!skipCache && !useLegacyOffset && !cursorRaw) {
+    putCachedGlobal(cacheKeyHead, result);
+  }
+  if (!skipCache && cacheKeyCursor && cursorDecoded) {
+    putCachedGlobal(cacheKeyCursor, result);
+  }
+
+  return result;
 }
 
 /** Top N for match end overlay. */
-export async function getRankingPreview(topN = 5): Promise<Array<{ position: number; teamId: string; teamName: string; rating: number }>> {
-  const { items } = await getGlobalRanking(topN, 0);
-  return items.map(({ position, teamId, teamName, rating }) => ({ position, teamId, teamName, rating }));
+export async function getRankingPreview(
+  topN = 5,
+  opts?: { skipCache?: boolean }
+): Promise<RankingPreviewRow[]> {
+  const skipCache = opts?.skipCache ?? false;
+  const key = `p:${topN}`;
+  if (!skipCache) {
+    const e = previewCache.get(key);
+    if (e && Date.now() <= e.expires) return e.value;
+    if (e) previewCache.delete(key);
+  }
+  const { items } = await getGlobalRanking({ limit: topN, skipCache: true });
+  const preview = items.map(({ position, teamId, teamName, rating }) => ({ position, teamId, teamName, rating }));
+  if (!skipCache) {
+    previewCache.set(key, { expires: Date.now() + RANKING_CACHE_TTL_MS, value: preview });
+  }
+  return preview;
 }
 
-/** Retorna posição atual de cada time no ranking global. */
-export async function getPositionsForTeams(
-  teamIds: string[]
-): Promise<Map<string, number>> {
+/** Retorna posição atual de cada time no ranking global (amostra até 200 primeiros). */
+export async function getPositionsForTeams(teamIds: string[]): Promise<Map<string, number>> {
   if (teamIds.length === 0) return new Map();
-  const { items } = await getGlobalRanking(200, 0);
+  const { items } = await getGlobalRanking({ limit: 200, skipCache: true });
   const map = new Map<string, number>();
   for (const item of items) {
     if (teamIds.includes(item.teamId)) map.set(item.teamId, item.position);

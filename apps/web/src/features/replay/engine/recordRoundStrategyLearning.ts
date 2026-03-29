@@ -1,10 +1,10 @@
 import type { MatchState, TeamSide } from "../types";
-import { getCtTeam, getTrTeam, getTrTeamFromState } from "./matchConstants";
+import { getBluSideTeam, getRedSideTeam, getRedSideTeamFromState } from "./matchConstants";
 import {
   archiveExcessEmergentStrategies,
   bumpStrategyWeight,
-  countCtEmergentConsecutiveWins,
-  countTrEmergentConsecutiveWins,
+  countBluSideEmergentConsecutiveWins,
+  countRedSideEmergentConsecutiveWins,
   defaultStrategyWeights,
   ensureWeightKeys
 } from "./strategyLearning";
@@ -17,67 +17,68 @@ export function recordRoundStrategyLearning(state: MatchState, winner: TeamSide)
   state.customBluStrategies ??= [];
   ensureWeightKeys(state);
 
-  const trTeam = getTrTeamFromState(state);
-  const trWon = winner === trTeam;
-  const trKey = state.activeTrStrategyKey ?? state.redStrategy;
-  const ctKey = state.activeCtStrategyKey ?? state.bluStrategy;
+  const redSideRoster = getRedSideTeamFromState(state);
+  const redSideWon = winner === redSideRoster;
+  const redKey = state.activeRedSideStrategyKey ?? state.redStrategy;
+  const bluKey = state.activeBluSideStrategyKey ?? state.bluStrategy;
 
   state.strategyHistory.push({
     round: state.round,
     redStrategy: state.redStrategy,
     bluStrategy: state.bluStrategy,
-    trStrategyKey: trKey,
-    ctStrategyKey: ctKey,
+    redSideStrategyKey: redKey,
+    bluSideStrategyKey: bluKey,
     winner,
-    trWon,
+    redSideWon,
     hadBombPlanted: state.bombPlanted,
-    isEmergentTr: trKey.startsWith("emergent-"),
-    isEmergentCt: ctKey.startsWith("emergent-ct-")
+    isEmergentRedSide: redKey.startsWith("emergent-"),
+    isEmergentBluSide:
+      bluKey.startsWith("emergent-blu-") || bluKey.startsWith("emergent-ct-")
   });
 
-  const trSide = getTrTeam(state.round, state.teamAStartsAs);
-  const ctSide = getCtTeam(state.round, state.teamAStartsAs);
+  const redRosterThisRound = getRedSideTeam(state.round, state.teamAStartsAs);
+  const bluRosterThisRound = getBluSideTeam(state.round, state.teamAStartsAs);
   state.lastRoundEndAlive = {
-    tr: state.bots.filter((b) => b.team === trSide && b.hp > 0).length,
-    ct: state.bots.filter((b) => b.team === ctSide && b.hp > 0).length
+    redSide: state.bots.filter((b) => b.team === redRosterThisRound && b.hp > 0).length,
+    bluSide: state.bots.filter((b) => b.team === bluRosterThisRound && b.hp > 0).length
   };
 
-  if (trWon) {
-    bumpStrategyWeight(state, "RED", trKey, 0.15);
-    bumpStrategyWeight(state, "BLU", ctKey, -0.08);
+  if (redSideWon) {
+    bumpStrategyWeight(state, "RED", redKey, 0.15);
+    bumpStrategyWeight(state, "BLU", bluKey, -0.08);
   } else {
-    bumpStrategyWeight(state, "BLU", ctKey, 0.15);
-    bumpStrategyWeight(state, "RED", trKey, -0.08);
+    bumpStrategyWeight(state, "BLU", bluKey, 0.15);
+    bumpStrategyWeight(state, "RED", redKey, -0.08);
   }
 
-  const cr = state.customRedStrategies.find((c) => c.id === trKey);
+  const cr = state.customRedStrategies.find((c) => c.id === redKey);
   if (cr) {
-    if (trWon) cr.stats.wins += 1;
+    if (redSideWon) cr.stats.wins += 1;
     else cr.stats.losses += 1;
   }
-  const cb = state.customBluStrategies.find((c) => c.id === ctKey);
+  const cb = state.customBluStrategies.find((c) => c.id === bluKey);
   if (cb) {
-    if (!trWon) cb.stats.wins += 1;
+    if (!redSideWon) cb.stats.wins += 1;
     else cb.stats.losses += 1;
   }
 
-  if (trKey.startsWith("emergent-")) {
-    const n = countTrEmergentConsecutiveWins(state, trKey);
+  if (redKey.startsWith("emergent-")) {
+    const n = countRedSideEmergentConsecutiveWins(state, redKey);
     if (n >= 2) {
-      const c = state.customRedStrategies.find((x) => x.id === trKey);
+      const c = state.customRedStrategies.find((x) => x.id === redKey);
       if (c && !c.promoted) {
         c.promoted = true;
-        bumpStrategyWeight(state, "RED", trKey, 0.2);
+        bumpStrategyWeight(state, "RED", redKey, 0.2);
       }
     }
   }
-  if (ctKey.startsWith("emergent-ct-")) {
-    const n = countCtEmergentConsecutiveWins(state, ctKey);
+  if (bluKey.startsWith("emergent-blu-") || bluKey.startsWith("emergent-ct-")) {
+    const n = countBluSideEmergentConsecutiveWins(state, bluKey);
     if (n >= 2) {
-      const c = state.customBluStrategies.find((x) => x.id === ctKey);
+      const c = state.customBluStrategies.find((x) => x.id === bluKey);
       if (c && !c.promoted) {
         c.promoted = true;
-        bumpStrategyWeight(state, "BLU", ctKey, 0.2);
+        bumpStrategyWeight(state, "BLU", bluKey, 0.2);
       }
     }
   }

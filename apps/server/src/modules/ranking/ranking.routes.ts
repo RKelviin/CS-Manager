@@ -6,11 +6,22 @@ export const rankingRoutes = Router();
 rankingRoutes.get("/global", async (req, res: Response) => {
   try {
     const limit = Math.min(100, parseInt(String(req.query.limit), 10) || 100);
-    const offset = Math.max(0, parseInt(String(req.query.offset), 10) || 0);
-    const result = await getGlobalRanking(limit, offset);
+    const offsetRaw = req.query.offset;
+    const offset =
+      offsetRaw !== undefined ? Math.max(0, parseInt(String(offsetRaw), 10) || 0) : undefined;
+    const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+    const result = await getGlobalRanking({
+      limit,
+      ...(offset !== undefined ? { offset } : {}),
+      ...(cursor ? { cursor } : {})
+    });
     res.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to get ranking";
+    if (msg === "Invalid ranking cursor") {
+      res.status(400).json({ error: msg });
+      return;
+    }
     res.status(500).json({ error: msg });
   }
 });

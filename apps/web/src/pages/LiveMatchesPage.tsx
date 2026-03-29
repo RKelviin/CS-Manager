@@ -136,9 +136,9 @@ export const LiveMatchesPage = () => {
     setRankingLoading(true);
     setRankingError(null);
     rankingApi
-      .getGlobal(200, 0)
-      .then((res) => {
-        if (!cancelled) setRanking(res.items ?? []);
+      .getGlobalAll(500)
+      .then((items) => {
+        if (!cancelled) setRanking(items);
       })
       .catch((e) => {
         if (!cancelled) {

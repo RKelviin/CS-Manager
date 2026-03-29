@@ -12,14 +12,29 @@ O replay 2D simula partidas em tempo real via **matchReducer** (`apps/web/src/fe
 | `simulation/index.ts` | Contrato público do motor + tick ms        |
 | `roundAdvance.ts`     | Próximo round, compras, halftime/OT, spawn |
 | `matchReducer.ts`     | Loop TICK, combate, fim de round           |
-| `situationalBrain.ts` | IA: movimento, targeting, objetivos TR/CT  |
-| `ctStrategy.ts`       | Estratégias CT: 3-2, stack-a/b, aggressive |
+| `situationalBrain.ts` | IA: movimento, targeting, objetivos papel RED/BLU |
+| `ctStrategy.ts`       | Estratégias BLU (defesa): 3-2, stack-a/b, aggressive |
 | `roundBuy.ts`         | Compras, eco, AWPer, drop                  |
 | `roleCombat.ts`       | Stats por arma, rotação da mira            |
 | `combatConstants.ts`  | Dano, cadência, precisão                   |
 | `economyConstants.ts` | Bônus round, loss streak, preços           |
 | `bombConstants.ts`    | Tempos plant/defuse, raios C4/kit/**arma no chão** (`WEAPON_DROP_PICKUP_RADIUS`) |
+| `matchConstants.ts`   | Regulamento, papéis RED/BLU por round, **cores de HUD e mapa** (`RED_SIDE_DISPLAY_COLORS`, `BLU_SIDE_DISPLAY_COLORS`, `getTeamDisplayColor`) |
 
+
+---
+
+## HUD e cores (papel por round)
+
+As cores na simulação seguem o **papel tático no round** (quem está no papel RED — ataque — vs papel BLU — defesa), não só o roster fixo `TeamSide`. No meio-tempo, o mesmo roster passa a usar a paleta do outro papel.
+
+- **Fonte única:** `apps/web/src/features/replay/engine/matchConstants.ts` — `RED_SIDE_DISPLAY_COLORS` e `BLU_SIDE_DISPLAY_COLORS` (primary, dot, light, border, bg, mapIcon, prefixos rgba para `flash` e `aim`).
+- **`getTeamDisplayColor(team, round, kind, teamAStartsAs)`** — devolve a cor certa para o roster `RED` ou `BLU` consoante o round e `teamAStartsAs`.
+- **HUD:** `MatchHUD`, `TeamPanel`, `RoundEndBanner`, `MatchEndScoreboard` e overlay de fim de partida consomem essas cores (texto, bordas, fundos).
+- **Mapa (`GameCanvas`):** círculo do jogador (`dot`), ícone de arma (`mapIcon`), **cone de visão / FOV** (preenchimento interno `aim` e halo externo `flash`), anel de plant da C4, e borda do jogador em combate (`primary`).
+- **Apostas (`BettingPanel`):** seleção do time RED/BLU alinhada às mesmas paletas para consistência visual.
+
+Nomenclatura de **lados no mapa** (pontos de interesse, spots táticos): `RED` / `BLU` / `both` — ver `docs/MAPAS.md` e `mapTypes.ts`.
 
 ---
 
@@ -29,7 +44,7 @@ O replay 2D simula partidas em tempo real via **matchReducer** (`apps/web/src/fe
 - **Tier** (`weaponTierValue` em `ui/weaponIcons.tsx`, alinhado à economia): sniper 4, rifle 3, budget_rifle 2, smg 1, pistola 0.
 - **Pickup:** qualquer jogador vivo pode recolher dentro do raio; só troca se o tier do chão for **maior** que o da primária atual; a arma antiga (se também for tier maior que zero) volta ao chão com offset.
 - **Round novo:** `weaponDrops` é limpo em `roundAdvance` (como `defuseKitDrops`).
-- **IA:** `situationalBrain` pode encaminhar bots para upgrades no chão (após prioridade da C4 largada para TR).
+- **IA:** `situationalBrain` pode encaminhar bots para upgrades no chão (após prioridade da C4 largada para o papel RED).
 - **Canvas:** ícone com `drawMapHudWeaponIcon` em modo `iconAnchor: "world"` (sem círculo de fundo).
 
 ---
@@ -37,7 +52,7 @@ O replay 2D simula partidas em tempo real via **matchReducer** (`apps/web/src/fe
 ## Regulamento
 
 - **Vitória:** primeiro a 7 rounds
-- **Regulamento:** até 12 rounds (6 TR + 6 CT por time)
+- **Regulamento:** até 12 rounds (6 no papel RED + 6 no papel BLU por roster)
 - **OT:** 6-6 → prorrogação (MR6). Primeiro a 13 vence; 15-15 empate
 - **Meio-tempo:** round 7 — troca de lados, economia reiniciada, pistol
 
@@ -77,8 +92,8 @@ O replay 2D simula partidas em tempo real via **matchReducer** (`apps/web/src/fe
 
 ## Estratégias e roles
 
-**CT:** default (3-2), stack-a, stack-b, aggressive, hold, retake (pós-plant), rotate (pós-plant / rotação tardia)
+**Papel BLU (defesa):** default (3-2), stack-a, stack-b, aggressive, hold, retake (pós-plant), rotate (pós-plant / rotação tardia)
 
-**TR:** rush, split, slow, default, fake (finta de site nos primeiros ~40% do round)
+**Papel RED (ataque):** rush, split, slow, default, fake (finta de site nos primeiros ~40% do round)
 
 **Roles:** IGL, Rifler, AWP, Entry, Sniper, Support, Lurker

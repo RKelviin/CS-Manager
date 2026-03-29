@@ -13,10 +13,11 @@ import { chooseBluStrategyForRound } from "./ctStrategy";
 import { chooseRedStrategyForRound } from "./trStrategy";
 import { applyDropForTeammate, compareBluKitPriority, computeRoundPurchase } from "./roundBuy";
 import {
+  FIRST_OT_ROUND,
   FIRST_ROUND_SECOND_HALF,
-  getCtTeam,
-  getCtTeamFromState,
-  getTrTeamFromState,
+  getBluSideTeam,
+  getBluSideTeamFromState,
+  getRedSideTeamFromState,
   OT_ROUNDS_PER_PERIOD,
   REGULATION_MAX_ROUNDS,
   ROUNDS_TO_WIN_MATCH
@@ -75,18 +76,17 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
   state.tickId = 0;
 
   const isHalfSwap = state.round === FIRST_ROUND_SECOND_HALF;
-  const otOffset = state.round - REGULATION_MAX_ROUNDS;
-  const isOvertime = state.round >= REGULATION_MAX_ROUNDS;
+  const isOvertime = state.round >= FIRST_OT_ROUND;
+  const otRoundIndexInPeriod =
+    isOvertime ? (state.round - FIRST_OT_ROUND) % OT_ROUNDS_PER_PERIOD : -1;
   const isOvertimeEconomyReset =
-    isOvertime &&
-    state.matchType === "tournament" &&
-    (state.round === REGULATION_MAX_ROUNDS || otOffset % OT_ROUNDS_PER_PERIOD === 0);
+    isOvertime && state.matchType === "tournament" && otRoundIndexInPeriod === 0;
 
   if (isHalfSwap) {
     state.lossStreak = { RED: 0, BLU: 0 };
     pushLog(
       state,
-      "MEIO-TEMPO: lados invertidos — quem era TR (laranja) passa a CT (azul) e vice-versa. Economia reiniciada; pistol round."
+      "MEIO-TEMPO: lados invertidos — quem era papel RED (vermelho) passa a BLU (azul) e vice-versa. Economia reiniciada; pistol round."
     );
   }
   if (isOvertimeEconomyReset && !isHalfSwap) {
@@ -101,13 +101,13 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
   if (sandboxPlant > 0) {
     pushLog(
       state,
-      `Bonus de plant: +$${sandboxPlant} para cada TR — C4 plantada no fim de round (antes do proximo).`
+      `Bonus de plant: +$${sandboxPlant} para cada jogador no papel RED — C4 plantada no fim de round (antes do proximo).`
     );
   }
 
   type IncomeRow = { nb: Bot; ob: Bot; moneyAfterIncome: number };
   const rows: IncomeRow[] = [];
-  /** Sempre o mesmo id: RED/BLU = roster fixo (time A / time B); TR/CT vem só do round em createMatchState. */
+  /** Sempre o mesmo id: RED/BLU = roster fixo (time A / time B); papel RED/BLU por round vem de createMatchState. */
   for (const ob of oldBots) {
     const nb = fresh.bots.find((b) => b.id === ob.id);
     if (!nb) continue;
@@ -134,11 +134,11 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
     roundsToWin: ROUNDS_TO_WIN_MATCH,
     regulationMaxRounds: REGULATION_MAX_ROUNDS
   };
-  const trForceBuyRound2 =
+  const redSideForceBuyRound2 =
     !isHalfSwap &&
     state.round === 2 &&
     hadBombPlantedAtResolve &&
-    winner === getCtTeam(1, state.teamAStartsAs);
+    winner === getBluSideTeam(1, state.teamAStartsAs);
 
   const bluPurchaseSorted = purchaseBots
     .filter((b) => b.team === "BLU")
@@ -148,7 +148,7 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
       bluDefuseKitSlotsRemaining: bluKitSlots,
       economyContext,
       teamAStartsAs: state.teamAStartsAs,
-      trForceBuyRound2
+      redSideForceBuyRound2
     });
     purchases.set(pb.id, buy);
     if (buy.hasDefuseKit) bluKitSlots -= 1;
@@ -159,7 +159,7 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
       computeRoundPurchase(pb, state.round, pb.money, avgRed, avgBlu, {
         economyContext,
         teamAStartsAs: state.teamAStartsAs,
-        trForceBuyRound2
+        redSideForceBuyRound2
       })
     );
   }
@@ -237,13 +237,13 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
     };
   });
 
-  const trs = state.bots.filter((b) => b.team === getTrTeamFromState(state));
+  const trs = state.bots.filter((b) => b.team === getRedSideTeamFromState(state));
   if (trs.length > 0) {
     trs[Math.floor(Math.random() * trs.length)].hasBomb = true;
   }
 
-  const trBots = state.bots.filter((b) => b.team === getTrTeamFromState(state));
-  const ctBots = purchaseBots.filter((b) => b.team === getCtTeamFromState(state));
+  const trBots = state.bots.filter((b) => b.team === getRedSideTeamFromState(state));
+  const ctBots = purchaseBots.filter((b) => b.team === getBluSideTeamFromState(state));
   state.bombDroppedAt = fresh.bombDroppedAt;
   state.defuseKitDrops = [];
   state.weaponDrops = [];
@@ -257,14 +257,14 @@ export const applyPendingRoundAdvance = (state: MatchState) => {
   state.defuserId = fresh.defuserId;
   const trPick = chooseRedStrategyForRound(state, trBots);
   state.redStrategy = trPick.strategy;
-  state.activeTrStrategyKey = trPick.trStrategyKey;
+  state.activeRedSideStrategyKey = trPick.redSideStrategyKey;
 
   const ctPick = chooseBluStrategyForRound(state, ctBots);
   state.bluStrategy = ctPick.strategy;
-  state.activeCtStrategyKey = ctPick.ctStrategyKey;
+  state.activeBluSideStrategyKey = ctPick.bluSideStrategyKey;
   pushLog(
     state,
-    `Proximo round ${state.round}: ${state.round % 2 === 1 ? "RED-1" : "BLU-1"} inicia · RED ${state.redStrategy} | BLU ${state.bluStrategy} · exec T site ${fresh.tsExecuteSite === "site-a" ? "A" : "B"}`
+    `Proximo round ${state.round}: ${state.round % 2 === 1 ? "RED-1" : "BLU-1"} inicia · RED ${state.redStrategy} | BLU ${state.bluStrategy} · exec site ${fresh.tsExecuteSite === "site-a" ? "A" : "B"}`
   );
 
   state.isRunning = resume;

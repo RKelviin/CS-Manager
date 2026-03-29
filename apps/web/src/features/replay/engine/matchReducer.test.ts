@@ -9,11 +9,11 @@ describe("getDecisionOrder", () => {
     teamBName: "Time B",
     teamAPlayers: ["A1", "A2", "A3", "A4", "A5"],
     teamBPlayers: ["B1", "B2", "B3", "B4", "B5"],
-    teamAStartsAs: "TR" as const,
+    teamAStartsAs: "RED" as const,
     mapData: getMapSync("dust2")!
   };
 
-  it("round 1: ordem TR0, CT0, TR1, CT1, ... (TR=RED, CT=BLU)", () => {
+  it("round 1: ordem RED0, BLU0, RED1, BLU1, ... (papel RED roster RED, papel BLU roster BLU)", () => {
     const state = createMatchState(setup);
     state.round = 1;
     const order = getDecisionOrder(state);
@@ -27,7 +27,7 @@ describe("getDecisionOrder", () => {
     expect(order[3].team).toBe("BLU");
   });
 
-  it("round 2: rotacao - CT0 primeiro", () => {
+  it("round 2: rotacao — BLU roster primeiro", () => {
     const state = createMatchState(setup);
     state.round = 2;
     const order = getDecisionOrder(state);
@@ -42,7 +42,7 @@ describe("matchReducer", () => {
     teamBName: "Time B",
     teamAPlayers: ["A1", "A2", "A3", "A4", "A5"],
     teamBPlayers: ["B1", "B2", "B3", "B4", "B5"],
-    teamAStartsAs: "TR" as const,
+    teamAStartsAs: "RED" as const,
     mapData: getMapSync("dust2")!
   };
 

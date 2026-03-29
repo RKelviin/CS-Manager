@@ -50,7 +50,11 @@ export const MatchControls = ({
           type="button"
           onClick={onFinishRound}
           disabled={finishDisabled}
-          title={finishDisabled ? "Round em intermissao ou partida encerrada" : "C4 plantada: TR vence · C4 nao plantada: CT vence"}
+          title={
+            finishDisabled
+              ? "Round em intermissao ou partida encerrada"
+              : "C4 plantada: papel RED vence · C4 nao plantada: papel BLU vence"
+          }
           style={{
             ...btnStyle,
             opacity: finishDisabled ? 0.45 : 1,

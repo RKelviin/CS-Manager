@@ -91,7 +91,7 @@ export const INFERNO_MAP: MapData = {
     },
     {
       "id": "spawn-t",
-      "name": "T Spawn",
+      "name": "RED Spawn",
       "x": 300,
       "y": 500,
       "width": 200,
@@ -100,7 +100,7 @@ export const INFERNO_MAP: MapData = {
     },
     {
       "id": "spawn-ct",
-      "name": "CT Spawn",
+      "name": "BLU Spawn",
       "x": 300,
       "y": 20,
       "width": 200,
@@ -156,18 +156,18 @@ export const INFERNO_MAP: MapData = {
   },
   "interestPoints": [
     { "id": "inf-banana", "x": 720, "y": 420, "type": "choke", "side": "both", "aimAngle": -2.4 },
-    { "id": "inf-apps", "x": 620, "y": 200, "type": "angle", "side": "CT", "aimAngle": -0.5 },
+    { "id": "inf-apps", "x": 620, "y": 200, "type": "angle", "side": "BLU", "aimAngle": -0.5 },
     { "id": "inf-mid", "x": 400, "y": 280, "type": "choke", "side": "both", "aimAngle": -1.4 },
-    { "id": "inf-site-a", "x": 700, "y": 100, "type": "cover", "side": "CT", "aimAngle": 1.5 },
-    { "id": "inf-site-b", "x": 100, "y": 100, "type": "cover", "side": "CT", "aimAngle": 0.3 },
-    { "id": "inf-pit", "x": 520, "y": 320, "type": "angle", "side": "CT", "aimAngle": -0.9 }
+    { "id": "inf-site-a", "x": 700, "y": 100, "type": "cover", "side": "BLU", "aimAngle": 1.5 },
+    { "id": "inf-site-b", "x": 100, "y": 100, "type": "cover", "side": "BLU", "aimAngle": 0.3 },
+    { "id": "inf-pit", "x": 520, "y": 320, "type": "angle", "side": "BLU", "aimAngle": -0.9 }
   ],
   "tacticalSpots": [
     { "x": 700, "y": 380, "watchAngle": -2.2, "label": "banana", "side": "both" },
-    { "x": 600, "y": 180, "watchAngle": -0.6, "label": "apps", "side": "CT" },
+    { "x": 600, "y": 180, "watchAngle": -0.6, "label": "apps", "side": "BLU" },
     { "x": 400, "y": 250, "watchAngle": 1.55, "label": "mid", "side": "both" },
-    { "x": 680, "y": 110, "watchAngle": -0.2, "label": "site-A", "side": "CT" },
-    { "x": 90, "y": 120, "watchAngle": 0.5, "label": "site-B", "side": "CT" },
-    { "x": 400, "y": 480, "watchAngle": -1.45, "label": "T-stairs", "side": "TR" }
+    { "x": 680, "y": 110, "watchAngle": -0.2, "label": "site-A", "side": "BLU" },
+    { "x": 90, "y": 120, "watchAngle": 0.5, "label": "site-B", "side": "BLU" },
+    { "x": 400, "y": 480, "watchAngle": -1.45, "label": "RED-stairs", "side": "RED" }
   ]
 };

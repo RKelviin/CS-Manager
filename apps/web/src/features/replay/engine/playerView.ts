@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Visão localizada do bot: só o que ele pode ver (FOV+LOS) e ouvir (tiros).
  */
 import { canSeeWithFov, hasLineOfSight, heardGunfireEnemies, THREAT_RADIUS } from "./situationalBrain";
 import { getWeaponFovForRole, getWeaponRangeForRole } from "./roleCombat";
-import { getTrTeamFromState } from "./matchConstants";
+import { getRedSideTeamFromState } from "./matchConstants";
 import type { Bot, MatchState } from "../types";
 
 export type PlayerView = {
@@ -67,7 +67,7 @@ export function buildPlayerView(bot: Bot, state: MatchState): PlayerView {
   if (state.bombPlanted && state.bombPlantSite) {
     bombState = state.defuserId && state.defuseProgressMs > 0 ? "defusing" : "planted";
   } else if (
-    bot.team === getTrTeamFromState(state) &&
+    bot.team === getRedSideTeamFromState(state) &&
     bot.hasBomb &&
     state.plantProgressMs > 0
   ) {

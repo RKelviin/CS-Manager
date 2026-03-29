@@ -9,10 +9,10 @@ export const matchEndReasonLabel = (cause: string | null | undefined): string =>
     "C4 plantada (manual)": "C4 plantada (finalizado manualmente)",
     "finalizado manualmente": "Round finalizado manualmente",
     eliminacao: "Todos eliminados",
-    "eliminacao TR": "Todos os TRs eliminados",
-    "eliminacao CT": "Todos os CTs eliminados",
-    "eliminacao dos CTs": "Todos os CTs eliminados",
-    "tempo (CT)": "Tempo do round esgotado (vitória CT)",
+    "eliminacao RED": "Todo o papel RED (ataque) eliminado",
+    "eliminacao BLU": "Todo o papel BLU (defesa) eliminado",
+    "eliminacao papel BLU": "Todo o papel BLU eliminado",
+    "tempo (BLU)": "Tempo do round esgotado (vitória do papel BLU)",
     "empate-regulamento": "Empate 6x6 apos 12 rounds (regulamento)",
     "empate-OT": "Empate apos OT (6 rounds de prorrogacao)"
   };

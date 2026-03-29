@@ -7,9 +7,11 @@ import type {
   MatchSetup,
   RedStrategy,
   BluStrategy,
+  SandboxCombatOverrides,
   StartsAsSide
 } from "../types";
 import { START_MONEY } from "./economyConstants";
+import { secondaryPistolForBotTeam } from "./roundBuy";
 import { getBluSideTeam, getRedSideTeam } from "./matchConstants";
 import { BLU_ROLES, RED_ROLES } from "./roleCombat";
 import { defaultStrategyWeights } from "./strategyLearning";
@@ -204,6 +206,11 @@ const ensureFreshStats = (bots: Bot[]): Bot[] =>
     damageContributors: []
   }));
 
+const cloneSandboxOverrides = (o: SandboxCombatOverrides | undefined): SandboxCombatOverrides | undefined => {
+  if (!o) return undefined;
+  return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { ...v }]));
+};
+
 const defaultSetup: MatchSetup = {
   teamAName: "RED",
   teamBName: "BLU",
@@ -237,6 +244,9 @@ export const createMatchState = (
               teamAStartsAs: normalizeTeamAStartsAs(st.teamAStartsAs),
               mapData: st.mapData,
               matchType: st.matchType,
+              sandboxMode: st.sandboxMode,
+              sandboxCombatOverrides: cloneSandboxOverrides(st.sandboxCombatOverrides),
+              sandboxBotPrimaryWeapon: st.sandboxBotPrimaryWeapon,
               teamAPlayerData: redBots.map((b) => ({
                 name: b.name,
                 aim: b.aim,
@@ -261,14 +271,20 @@ export const createMatchState = (
           })()
         : defaultSetup;
 
+  const prevMatch = init && "bots" in init ? (init as MatchState) : null;
+
   const setupNorm: MatchSetup = {
     ...setup,
-    teamAStartsAs: normalizeTeamAStartsAs(setup.teamAStartsAs)
+    teamAStartsAs: normalizeTeamAStartsAs(setup.teamAStartsAs),
+    sandboxMode: setup.sandboxMode ?? prevMatch?.sandboxMode,
+    sandboxCombatOverrides:
+      cloneSandboxOverrides(setup.sandboxCombatOverrides) ??
+      cloneSandboxOverrides(prevMatch?.sandboxCombatOverrides),
+    sandboxBotPrimaryWeapon: setup.sandboxBotPrimaryWeapon ?? prevMatch?.sandboxBotPrimaryWeapon
   };
 
   const round = init && "round" in init && "bots" in init ? (init as MatchState).round : 1;
   const matchType = setupNorm.matchType ?? "friendly";
-  const prevMatch = init && "bots" in init ? (init as MatchState) : null;
   const redStrategy = pickStrategy(RED_STRATS);
   const tsExecuteSite = Math.random() < 0.5 ? "site-a" : "site-b";
   const bluStrategy: BluStrategy = "default";
@@ -314,7 +330,19 @@ export const createMatchState = (
         : { ...(init as MatchState).morale },
     matchType,
     otPeriodScore: fullReset ? undefined : (init && "otPeriodScore" in init ? { ...(init as MatchState).otPeriodScore! } : undefined),
-    bots: ensureFreshStats(createBots(setupNorm, map, round)),
+    bots: (() => {
+      let bots = ensureFreshStats(createBots(setupNorm, map, round));
+      const forced = setupNorm.sandboxBotPrimaryWeapon;
+      if (setupNorm.sandboxMode === true && forced) {
+        const ta = setupNorm.teamAStartsAs;
+        bots = bots.map((b) => ({
+          ...b,
+          primaryWeapon: forced,
+          secondaryWeapon: secondaryPistolForBotTeam(b.team, round, ta)
+        }));
+      }
+      return bots;
+    })(),
     bombDroppedAt: null,
     defuseKitDrops: [],
     weaponDrops: [],
@@ -346,6 +374,9 @@ export const createMatchState = (
     customRedStrategies,
     customBluStrategies,
     activeRedSideStrategyKey: redStrategy,
-    activeBluSideStrategyKey: bluStrategy
+    activeBluSideStrategyKey: bluStrategy,
+    sandboxMode: setupNorm.sandboxMode === true,
+    sandboxCombatOverrides: cloneSandboxOverrides(setupNorm.sandboxCombatOverrides),
+    sandboxBotPrimaryWeapon: setupNorm.sandboxBotPrimaryWeapon
   };
 };

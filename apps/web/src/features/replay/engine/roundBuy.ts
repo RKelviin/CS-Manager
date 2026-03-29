@@ -38,8 +38,13 @@ import {
 export const isPistolRound = (roundNumber: number) =>
   roundNumber <= 1 || roundNumber === FIRST_ROUND_SECOND_HALF;
 
-const pistolPrimary = (side: TeamSide, roundNumber: number, teamAStartsAs: StartsAsSide = "RED") =>
-  side === getRedSideTeam(roundNumber, teamAStartsAs) ? "Glock-18" : "USP-S";
+/** Pistola de primária conforme lado no round (T = Glock, CT = USP no modelo atual). */
+export const secondaryPistolForBotTeam = (
+  botTeam: TeamSide,
+  roundNumber: number,
+  teamAStartsAs: StartsAsSide = "RED"
+): string =>
+  botTeam === getRedSideTeam(roundNumber, teamAStartsAs) ? "Glock-18" : "USP-S";
 
 export const avgTeamMoneyAlive = (bots: Bot[], side: TeamSide) => {
   const list = bots.filter((b) => b.team === side && b.hp > 0);
@@ -422,7 +427,7 @@ export const computeRoundPurchase = (
 ): RoundPurchase => {
   const side = bot.team;
   const teamAStartsAs = options?.teamAStartsAs ?? "RED";
-  const sec = pistolPrimary(side, roundNumber, teamAStartsAs);
+  const sec = secondaryPistolForBotTeam(side, roundNumber, teamAStartsAs);
   let m = moneyAfterIncome;
   let armor: ArmorLoadout = "none";
   let primary = sec;

@@ -26,6 +26,15 @@ export type MatchPlayerData = {
 /** Tipo de partida: tournament/league = ranking + overtime; friendly = sem OT, pode empatar. */
 export type MatchType = "tournament" | "friendly";
 
+/** Overrides de combate na Sandbox (valores de UI 0–200; 100 = 100% do padrão do motor). Chave = nome da primária ex.: AK-47, AWP. */
+export type SandboxWeaponCombatUI = {
+  damage: number;
+  precision: number;
+  range: number;
+};
+
+export type SandboxCombatOverrides = Record<string, SandboxWeaponCombatUI>;
+
 /** Configuracao da partida: nomes dos times, jogadores e papel inicial do time A. */
 export type MatchSetup = {
   teamAName: string;
@@ -42,6 +51,11 @@ export type MatchSetup = {
   mapData?: import("./map/mapTypes").MapData;
   /** tournament = ranking + overtime 4 rounds; friendly = sem OT (default) */
   matchType?: MatchType;
+  /** Partida de laboratório: ticks manuais (STEP) e overrides isolados da liga */
+  sandboxMode?: boolean;
+  sandboxCombatOverrides?: SandboxCombatOverrides;
+  /** Sandbox: primária equipada em todos os bots vivos (undefined = pistola por lado) */
+  sandboxBotPrimaryWeapon?: string;
 };
 
 /** Papel tatico (HUD + IA) */
@@ -240,10 +254,16 @@ export type MatchState = {
   activeBluSideStrategyKey: string;
   /** Vivos no papel RED vs BLU no fim do último round (contexto para o round seguinte) */
   lastRoundEndAlive?: { redSide: number; bluSide: number };
+  /** Laboratório / playtest: STEP com pause, overrides de combate sem afetar liga */
+  sandboxMode?: boolean;
+  sandboxCombatOverrides?: SandboxCombatOverrides;
+  /** Sandbox: primária forçada para jogadores (undefined = pistola por lado no spawn) */
+  sandboxBotPrimaryWeapon?: string;
 };
 
 export type MatchEvent =
   | { type: "TICK"; deltaMs: number }
+  | { type: "STEP"; deltaMs: number }
   | { type: "START" }
   | { type: "PAUSE" }
   | { type: "RESET" }

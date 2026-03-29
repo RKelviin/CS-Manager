@@ -35,11 +35,11 @@ docs/
 
 ### Feature `replay` (simulação no cliente)
 
-- **`features/replay/index.ts`** — API pública para páginas: `MatchProvider`, `useMatchContext`, `useMatch`, `matchRegistry`, tipos, domínio de times.
+- **`features/replay/index.ts`** — API pública para páginas: `MatchProvider`, `useMatchContext`, `useMatch`, `matchRegistry`, **`sandboxMatchRegistry`**, `createSandboxBot`, tipos (incl. overrides sandbox), domínio de times.
 - **`simulation/`** — contrato do motor: `matchReducer`, `createMatchState`, `SIMULATION_TICK_MS`, avanço de round (`roundAdvance`).
 - **`domain/teamModel.ts`** — documentação e helpers **RED/BLU (roster)** vs **papel RED (ataque) / BLU (defesa) por round**.
 - **`engine/`** — implementação (reducer principal, combate, economia, IA, drops de arma); **`matchConstants.ts`** concentra regulamento, troca de papéis por round e **paletas HUD/mapa** (`getTeamDisplayColor`). Ver `docs/ENGINE.md` (secção HUD e cores).
-- **`state/`** — `matchRegistry` (partidas em background, tick global): `removeEndedMatches`, `removeStaleIdleDuplicates` (evita acumular lobbies 0–0 R1 ao trocar mapa), `subscribeStructural` para listas; `MatchContext` com `cleanupRegistry` e `watchMatch` (URL `?matchId=`, pode mudar para Simulação).
+- **`state/`** — `matchRegistry` (partidas em background, tick global): `removeEndedMatches`, `removeStaleIdleDuplicates` (evita acumular lobbies 0–0 R1 ao trocar mapa), `subscribeStructural` para listas; `MatchContext` com `cleanupRegistry` e `watchMatch` (URL `?matchId=`, pode mudar para Simulação). **`sandboxMatchRegistry`** — instância separada usada só pela página Sandbox.
 - **`ui/`** — componentes da partida (`MatchHUD`, `GameCanvas`, `TeamPanel`, …) e **`LiveSpectatorLayout`** (HUD + times + mapa, sem controlos/log); barrel `ui/index.ts`.
 - **`utils/matchRankingLookup.ts`** — cruza nomes de times com o ranking global (`/api/ranking/global`) para ordenação e destaque na página **Partidas ao vivo**.
 
@@ -48,6 +48,7 @@ docs/
 | Página            | Função |
 |-------------------|--------|
 | **Simulação**     | Criar/assistir partida com controlos, log, overlay de fim; várias partidas em paralelo no registry. |
+| **Sandbox**       | Laboratório do motor (`PlaytestLabPage`): `sandboxMatchRegistry`, `STEP` com pausa, overrides de combate (0–200%), loadout global, spawn por clique, overlay nav/path. Ver `docs/ENGINE.md` (secção Sandbox). |
 | **Partidas ao vivo** | Lista partidas **em andamento** no registry; destaque automático pela **média de rating** dos dois times; clique na lista troca o jogo exibido (só espetáculo: placar, painéis, mapa). Não altera `watchMatch` / aba Simulação. |
 
 ---

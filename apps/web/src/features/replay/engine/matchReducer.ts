@@ -12,6 +12,7 @@ import {
   getHitChanceBonusForRole,
   getRangePenaltyMultiplier,
   getRotateStepForRole,
+  getSandboxAimTermScale,
   getWeaponFovForRole,
   getWeaponRangeForRole
 } from "./roleCombat";
@@ -542,7 +543,7 @@ const runCombat = (state: MatchState, order: Bot[]) => {
     const victim = pickCombatVictim(attacker, inSight, state);
     if (!victim) continue;
 
-    const maxR = getWeaponRangeForRole(attacker);
+    const maxR = getWeaponRangeForRole(attacker, state);
     const distToVictim = Math.hypot(attacker.x - victim.x, attacker.y - victim.y);
     const rangePenalty =
       (distToVictim / maxR) * 0.11 * getRangePenaltyMultiplier(attacker);
@@ -559,10 +560,11 @@ const runCombat = (state: MatchState, order: Bot[]) => {
       moveLen > 2 && toVictimLen > 1
         ? Math.max(0, (moveDx * toVictimDx + moveDy * toVictimDy) / (moveLen * toVictimLen)) * 0.04
         : 0;
+    const aimScale = getSandboxAimTermScale(state, attacker.primaryWeapon);
     const hitChance = clamp(
       0.5 +
-        attacker.aim / 165 +
-        getHitChanceBonusForRole(attacker) -
+        (attacker.aim / 165) * aimScale +
+        getHitChanceBonusForRole(attacker, state) -
         rangePenalty -
         panicPenalty(attacker, state) +
         peekerBonus,
@@ -578,8 +580,8 @@ const runCombat = (state: MatchState, order: Bot[]) => {
       kind === "sniper"
         ? SNIPER_FIXED_DAMAGE
         : BASE_DAMAGE_MIN + Math.random() * (BASE_DAMAGE_MAX - BASE_DAMAGE_MIN);
-    let raw = Math.floor(base * getDamageMultiplierForRole(attacker));
-    const isHeadshot = Math.random() < getHeadshotChanceForRole(attacker);
+    let raw = Math.floor(base * getDamageMultiplierForRole(attacker, state));
+    const isHeadshot = Math.random() < getHeadshotChanceForRole(attacker, state);
     if (isHeadshot) raw = Math.floor(raw * HEADSHOT_DAMAGE_MULTIPLIER);
     const dmg = damageAfterArmor(raw, victim.armor, isHeadshot, kind);
     attacker.damageDealt += dmg;
@@ -796,7 +798,7 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
       /** Defusando: se vir inimigo, para para atirar (nao pode atirar enquanto defusa) */
       const enemies = state.bots.filter((b) => b.team !== defuser!.team && b.hp > 0);
       const enemyInSight = enemies.some((e) =>
-        canSeeWithFov(mapFor(state), defuser!, e, getWeaponFovForRole(defuser!), getWeaponRangeForRole(defuser!))
+        canSeeWithFov(mapFor(state), defuser!, e, getWeaponFovForRole(defuser!), getWeaponRangeForRole(defuser!, state))
       );
       if (enemyInSight) {
         state.defuseProgressMs = 0;
@@ -845,7 +847,7 @@ const processBombPhase = (state: MatchState, deltaMs: number) => {
     /** Plantando: se vir inimigo, para para atirar (nao pode atirar enquanto planta) */
     const enemies = state.bots.filter((b) => b.team !== carrier.team && b.hp > 0);
     const enemyInSight = enemies.some((e) =>
-      canSeeWithFov(mapFor(state), carrier, e, getWeaponFovForRole(carrier), getWeaponRangeForRole(carrier))
+      canSeeWithFov(mapFor(state), carrier, e, getWeaponFovForRole(carrier), getWeaponRangeForRole(carrier, state))
     );
     if (!enemyInSight) {
       state.plantProgressMs += deltaMs;
@@ -926,39 +928,40 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
     return state;
   }
 
-  if (event.type === "TICK") {
-    if ((prev.matchWinner != null || prev.matchDraw) && prev.postMatchPauseMs > 0) {
-      return {
-        ...prev,
-        postMatchPauseMs: Math.max(0, prev.postMatchPauseMs - event.deltaMs)
-      };
-    }
-    /** Pausa de intermissao: simulacao parada, banner conta 5s */
-    if (!prev.isRunning && prev.roundEndBanner != null && prev.roundEndBannerMs > 0) {
-      const nextMs = Math.max(0, prev.roundEndBannerMs - event.deltaMs);
-      const ended = nextMs <= 0;
-      if (ended && prev.pendingRoundAdvance != null) {
-        const state: MatchState = {
-          ...prev,
-          roundEndBannerMs: 0,
-          roundEndBanner: null,
-          logs: [...prev.logs],
-          score: { ...prev.score },
-          morale: prev.morale ? { ...prev.morale } : { RED: 100, BLU: 100 }
-        };
-        applyPendingRoundAdvance(state);
-        return state;
-      }
-      return {
-        ...prev,
-        roundEndBannerMs: nextMs,
-        roundEndBanner: prev.roundEndBanner
-      };
-    }
-    if (!prev.isRunning) return prev;
-  } else {
-    return prev;
+  if (event.type !== "TICK" && event.type !== "STEP") return prev;
+
+  const deltaMs = event.deltaMs;
+  if (event.type === "STEP" && !prev.sandboxMode) return prev;
+
+  if ((prev.matchWinner != null || prev.matchDraw) && prev.postMatchPauseMs > 0) {
+    return {
+      ...prev,
+      postMatchPauseMs: Math.max(0, prev.postMatchPauseMs - deltaMs)
+    };
   }
+  /** Pausa de intermissao: simulacao parada, banner conta 5s */
+  if (!prev.isRunning && prev.roundEndBanner != null && prev.roundEndBannerMs > 0) {
+    const nextMs = Math.max(0, prev.roundEndBannerMs - deltaMs);
+    const ended = nextMs <= 0;
+    if (ended && prev.pendingRoundAdvance != null) {
+      const bannerState: MatchState = {
+        ...prev,
+        roundEndBannerMs: 0,
+        roundEndBanner: null,
+        logs: [...prev.logs],
+        score: { ...prev.score },
+        morale: prev.morale ? { ...prev.morale } : { RED: 100, BLU: 100 }
+      };
+      applyPendingRoundAdvance(bannerState);
+      return bannerState;
+    }
+    return {
+      ...prev,
+      roundEndBannerMs: nextMs,
+      roundEndBanner: prev.roundEndBanner
+    };
+  }
+  if (!prev.isRunning && event.type !== "STEP") return prev;
 
   const state: MatchState = {
     ...prev,
@@ -998,22 +1001,22 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
   const inEndOfRoundSandbox =
     state.pendingRoundAdvance != null && state.roundEndBannerMs > 0;
   if (!inEndOfRoundSandbox) {
-    state.timeLeftMs = Math.max(0, state.timeLeftMs - event.deltaMs);
+    state.timeLeftMs = Math.max(0, state.timeLeftMs - deltaMs);
   }
 
   const decisionOrder = applyDecisions(state);
   pickupBomb(state);
   pickupDefuseKit(state);
   pickupWeaponDrops(state);
-  processBombPhase(state, event.deltaMs);
+  processBombPhase(state, deltaMs);
   if (state.round !== roundBefore) {
-    tickRoundEndBanner(state, event.deltaMs);
+    tickRoundEndBanner(state, deltaMs);
     return state;
   }
 
   runCombat(state, decisionOrder);
   if (state.round !== roundBefore) {
-    tickRoundEndBanner(state, event.deltaMs);
+    tickRoundEndBanner(state, deltaMs);
     return state;
   }
 
@@ -1041,7 +1044,7 @@ export const matchReducer = (prev: MatchState, event: MatchEvent): MatchState =>
     }
   }
 
-  tickRoundEndBanner(state, event.deltaMs);
+  tickRoundEndBanner(state, deltaMs);
 
   return state;
 };

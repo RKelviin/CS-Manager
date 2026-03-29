@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Visão localizada do bot: só o que ele pode ver (FOV+LOS) e ouvir (tiros).
  */
 import { canSeeWithFov, hasLineOfSight, heardGunfireEnemies, THREAT_RADIUS } from "./situationalBrain";
@@ -36,7 +36,7 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
 /** Constrói a visão localizada do bot (FOV + áudio). */
 export function buildPlayerView(bot: Bot, state: MatchState): PlayerView {
   const fov = getWeaponFovForRole(bot);
-  const rng = getWeaponRangeForRole(bot);
+  const rng = getWeaponRangeForRole(bot, state);
 
   const enemies = state.bots.filter((b) => b.team !== bot.team && b.hp > 0);
   const allies = state.bots.filter((b) => b.team === bot.team && b.id !== bot.id && b.hp > 0);

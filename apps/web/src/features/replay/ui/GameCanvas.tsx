@@ -4,8 +4,9 @@ import { getTeamDisplayColor, getRedSideTeamFromState } from "../engine/matchCon
 import { getWeaponFovForRole, getWeaponRangeForRole } from "../engine/roleCombat";
 import { getPlantedBombWorldPos } from "../engine/situationalBrain";
 import { BOT_RADIUS, unobstructedRayDistance } from "../map/dust2Map";
+import { getNavMeshNodes } from "../map/navMesh";
 import type { MapData } from "../map/mapTypes";
-import type { MatchState, TeamSide } from "../types";
+import type { MatchState } from "../types";
 import {
   drawMapHudWeaponIcon,
   drawMiniC4BadgeOnPlayer,
@@ -47,7 +48,22 @@ function fillWallClippedVisionCone(
   ctx.fill();
 }
 
-export const GameCanvas = ({ state }: { state: MatchState }) => {
+export type GameCanvasLabProps = {
+  /** Desenha nós da malha de navegação */
+  showNavMesh?: boolean;
+  /** Desenha linhas navPath dos bots vivos */
+  showBotNavPaths?: boolean;
+  /** Clique no mapa → coordenadas no espaço do mapa (ex.: spawn na Sandbox) */
+  onMapWorldClick?: (x: number, y: number) => void;
+};
+
+export const GameCanvas = ({
+  state,
+  lab
+}: {
+  state: MatchState;
+  lab?: GameCanvasLabProps;
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const map = state.mapData ?? DUST2_MAP;
 
@@ -64,6 +80,14 @@ export const GameCanvas = ({ state }: { state: MatchState }) => {
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#2a2a2a";
     ctx.fillRect(10, 10, w - 20, h - 20);
+
+    if (lab?.showNavMesh) {
+      const nodes = getNavMeshNodes(map);
+      ctx.fillStyle = "rgba(34, 197, 94, 0.35)";
+      for (const n of nodes) {
+        ctx.fillRect(n.x - 1.5, n.y - 1.5, 3, 3);
+      }
+    }
 
     map.zones.forEach((z) => {
       ctx.strokeStyle = z.type === "site" ? "#f00" : "#00f";
@@ -84,7 +108,7 @@ export const GameCanvas = ({ state }: { state: MatchState }) => {
       const isFiring = lastFireTick >= 0 && tickId - lastFireTick < 2;
       const flashAlpha = isFiring ? 0.28 : 0.05;
 
-      const wr = getWeaponRangeForRole(bot);
+      const wr = getWeaponRangeForRole(bot, state);
       const wf = getWeaponFovForRole(bot);
       fillWallClippedVisionCone(
         ctx,
@@ -116,6 +140,20 @@ export const GameCanvas = ({ state }: { state: MatchState }) => {
       ctx.strokeStyle = "#555";
       ctx.strokeRect(wall.x, wall.y, wall.width, wall.height);
     });
+
+    if (lab?.showBotNavPaths) {
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.55)";
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash([4, 4]);
+      for (const bot of state.bots) {
+        if (bot.hp <= 0 || !bot.navPath?.length) continue;
+        ctx.beginPath();
+        ctx.moveTo(bot.x, bot.y);
+        for (const p of bot.navPath) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
 
     const bombWorld = state.bombDroppedAt;
     if (bombWorld) {
@@ -254,7 +292,33 @@ export const GameCanvas = ({ state }: { state: MatchState }) => {
       const p = getPlantedBombWorldPos(state)!;
       drawCircularProgress(p.x, p.y, state.defuseProgressMs / need, "#60a5fa");
     }
-  }, [state]);
+  }, [state, lab?.showNavMesh, lab?.showBotNavPaths]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const onWorldClick = lab?.onMapWorldClick;
+    if (!canvas || !onWorldClick) return;
+
+    const toWorld = (clientX: number, clientY: number) => {
+      const r = canvas.getBoundingClientRect();
+      const sx = map.width / r.width;
+      const sy = map.height / r.height;
+      return {
+        x: (clientX - r.left) * sx,
+        y: (clientY - r.top) * sy
+      };
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      const { x, y } = toWorld(e.clientX, e.clientY);
+      onWorldClick(x, y);
+    };
+
+    canvas.addEventListener("pointerdown", onPointerDown);
+    return () => canvas.removeEventListener("pointerdown", onPointerDown);
+  }, [lab?.onMapWorldClick, map.width, map.height]);
+
+  const spawnActive = lab?.onMapWorldClick != null;
 
   return (
     <div
@@ -275,7 +339,9 @@ export const GameCanvas = ({ state }: { state: MatchState }) => {
           height: "auto",
           display: "block",
           borderRadius: 8,
-          boxShadow: "0 0 0 1px rgba(0,0,0,0.4)"
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.4)",
+          cursor: spawnActive ? "crosshair" : undefined,
+          touchAction: spawnActive ? "none" : undefined
         }}
       />
     </div>

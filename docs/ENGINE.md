@@ -20,7 +20,8 @@ O replay 2D simula partidas em tempo real via **matchReducer** (`apps/web/src/fe
 | `economyConstants.ts` | Bônus round, loss streak, preços           |
 | `bombConstants.ts`    | Tempos plant/defuse, raios C4/kit/**arma no chão** (`WEAPON_DROP_PICKUP_RADIUS`) |
 | `matchConstants.ts`   | Regulamento, papéis RED/BLU por round, **cores de HUD e mapa** (`RED_SIDE_DISPLAY_COLORS`, `BLU_SIDE_DISPLAY_COLORS`, `getTeamDisplayColor`) |
-
+| `sandboxWeapons.ts`   | Lista de primárias selecionáveis na UI da Sandbox (`SANDBOX_SELECTABLE_PRIMARIES`) |
+| `createSandboxBot.ts` | Bot extra no laboratório: parede, snap opcional ao nav, primária alinhada ao loadout sandbox |
 
 ---
 
@@ -97,3 +98,25 @@ Nomenclatura de **lados no mapa** (pontos de interesse, spots táticos): `RED` /
 **Papel RED (ataque):** rush, split, slow, default, fake (finta de site nos primeiros ~40% do round)
 
 **Roles:** IGL, Rifler, AWP, Entry, Sniper, Support, Lurker
+
+---
+
+## Sandbox (laboratório / Playtest)
+
+Página **Sandbox** (`PlaytestLabPage`, rota/menu `playtestlab`): partida isolada da liga com segundo registry e ajustes de combate.
+
+### Registry e estado
+
+- **`sandboxMatchRegistry`** (`state/matchRegistry.ts`) — mesma lógica que `matchRegistry`, mas **só** para o laboratório; não entra na barra de partidas da liga nem no `MatchProvider`.
+- **`sandboxMode`** em `MatchState` — habilita o evento **`STEP`** (`{ type: "STEP", deltaMs }`): um tick do motor **com a simulação pausada** (o `TICK` normal ignora quando `!isRunning`).
+- **`sandboxCombatOverrides`** — por nome de primária (ex.: `AK-47`, `AWP`): `damage`, `precision`, `range` em escala **0–200** onde **100 = 100%** do valor base do motor; o reducer/`roleCombat` aplicam como multiplicador `valor / 100`.
+- **`sandboxBotPrimaryWeapon`** — primária forçada para todos os bots vivos; `undefined` volta ao modo **pistola por lado** (`secondaryPistolForBotTeam` em `roundBuy.ts`, exportado).
+
+### UI e canvas
+
+- Sliders de combate por arma (dropdown de arma para **ajuste** vs dropdown **arma equipada**); registro de texto com linhas no formato acordado (`DMG de … alterado de X para Y`); botão compacto ao lado do slider para **restaurar 100%**.
+- **`GameCanvas`** aceita `lab?`: overlay da **malha de nav** (`getNavMeshNodes`), **navPath** dos bots, clique → coordenadas mundo; spawn de bot com `createSandboxBot` + `patchMatch`.
+
+### Eventos (`MatchEvent`)
+
+Além de `TICK`, `START`, `PAUSE`, `RESET`, `FINISH_ROUND`, existe **`STEP`** (só efetivo com `sandboxMode`).

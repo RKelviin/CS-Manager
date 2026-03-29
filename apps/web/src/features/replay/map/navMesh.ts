@@ -165,6 +165,26 @@ export const canTravelLine = (map: MapData, a: NavPoint, b: NavPoint): boolean =
 export const findNavPath = (map: MapData, from: NavPoint, to: NavPoint): NavPoint[] =>
   buildNavMesh(map).findNavPath(from, to);
 
+/** Nós da malha (para overlay / snap na Sandbox). */
+export const getNavMeshNodes = (map: MapData): NavPoint[] =>
+  buildNavMesh(map).nodes.map((n) => ({ ...n }));
+
+/** Projeta um ponto no nó caminhável mais próximo. */
+export const snapToNearestNavNode = (map: MapData, p: NavPoint): NavPoint => {
+  const nodes = buildNavMesh(map).nodes;
+  if (nodes.length === 0) return { ...p };
+  let best = nodes[0];
+  let bestD = dist(p, best);
+  for (let i = 1; i < nodes.length; i++) {
+    const d = dist(p, nodes[i]);
+    if (d < bestD) {
+      bestD = d;
+      best = nodes[i];
+    }
+  }
+  return { ...best };
+};
+
 export const syncNavToGoal = (map: MapData, bot: Bot, arriveDist: number) => {
   const mesh = buildNavMesh(map);
   const gx = bot.targetX;

@@ -1,4 +1,4 @@
-import type { Bot, PlayerRole } from "../types";
+import type { Bot, MatchState, PlayerRole } from "../types";
 import { weaponKind } from "../ui/weaponIcons";
 import {
   DAMAGE_MULTIPLIER_BY_KIND,
@@ -10,6 +10,19 @@ import {
   WEAPON_FOV,
   WEAPON_RANGE
 } from "./combatConstants";
+
+type SandboxCombatSlice = Pick<MatchState, "sandboxMode" | "sandboxCombatOverrides">;
+
+const sandboxRow = (state: SandboxCombatSlice | undefined, primaryWeapon: string) => {
+  if (!state?.sandboxMode || !state.sandboxCombatOverrides) return null;
+  return state.sandboxCombatOverrides[primaryWeapon] ?? null;
+};
+
+/** Escala o termo aim/165 na chance de acerto (Sandbox). */
+export const getSandboxAimTermScale = (state: MatchState | undefined, primaryWeapon: string) => {
+  const row = sandboxRow(state, primaryWeapon);
+  return row ? row.precision / 100 : 1;
+};
 
 /** Papéis fixos por slot (0–4) — RED e BLU */
 export const RED_ROLES: PlayerRole[] = ["IGL", "Rifler", "AWP", "Rifler", "Rifler"];
@@ -37,7 +50,12 @@ const FOV_BY_KIND_RAD: Record<ReturnType<typeof weaponKind>, number> = {
 };
 
 /** Alcance de visão / tiro: depende da arma primaria, nao do papel */
-export const getWeaponRangeForRole = (bot: Bot) => RANGE_BY_KIND[weaponKind(bot.primaryWeapon)];
+export const getWeaponRangeForRole = (bot: Bot, state?: MatchState) => {
+  const base = RANGE_BY_KIND[weaponKind(bot.primaryWeapon)];
+  const row = sandboxRow(state, bot.primaryWeapon);
+  if (row) return Math.max(45, base * (row.range / 100));
+  return base;
+};
 
 /** FOV de visão / mira: depende da arma primaria, nao do papel */
 export const getWeaponFovForRole = (bot: Bot) => FOV_BY_KIND_RAD[weaponKind(bot.primaryWeapon)];
@@ -53,8 +71,12 @@ export const getRotateStepForRole = (bot: Bot) => {
 };
 
 /** Bonus flat na chance de acerto por arma (AWP muito precisa, pistol menos) */
-export const getHitChanceBonusForRole = (bot: Bot) =>
-  HIT_CHANCE_BONUS_BY_KIND[weaponKind(bot.primaryWeapon)] ?? 0;
+export const getHitChanceBonusForRole = (bot: Bot, state?: MatchState) => {
+  const base = HIT_CHANCE_BONUS_BY_KIND[weaponKind(bot.primaryWeapon)] ?? 0;
+  const row = sandboxRow(state, bot.primaryWeapon);
+  if (row) return base * (row.precision / 100);
+  return base;
+};
 
 /** Multiplicador da penalidade por distancia (AWP quase nao sofre a longa distancia) */
 export const getRangePenaltyMultiplier = (bot: Bot) =>
@@ -65,12 +87,20 @@ export const getFireCooldownTicksForRole = (bot: Bot) =>
   FIRE_COOLDOWN_BY_KIND[weaponKind(bot.primaryWeapon)] ?? 2;
 
 /** Multiplicador de dano por arma (AWP alto, pistol baixo) */
-export const getDamageMultiplierForRole = (bot: Bot) =>
-  DAMAGE_MULTIPLIER_BY_KIND[weaponKind(bot.primaryWeapon)] ?? 1;
+export const getDamageMultiplierForRole = (bot: Bot, state?: MatchState) => {
+  const base = DAMAGE_MULTIPLIER_BY_KIND[weaponKind(bot.primaryWeapon)] ?? 1;
+  const row = sandboxRow(state, bot.primaryWeapon);
+  if (row) return base * (row.damage / 100);
+  return base;
+};
 
 /** Chance de headshot por arma (AWP alta, pistol baixa); headshot aplica dano x4 */
-export const getHeadshotChanceForRole = (bot: Bot) =>
-  HEADSHOT_CHANCE_BY_KIND[weaponKind(bot.primaryWeapon)] ?? 0.1;
+export const getHeadshotChanceForRole = (bot: Bot, state?: MatchState) => {
+  const base = HEADSHOT_CHANCE_BY_KIND[weaponKind(bot.primaryWeapon)] ?? 0.1;
+  const row = sandboxRow(state, bot.primaryWeapon);
+  if (row) return Math.min(0.98, base * (row.precision / 100));
+  return base;
+};
 
 /** IGL: prioriza ameaca perto do portador da C4 */
 export const threatToCarrierScore = (

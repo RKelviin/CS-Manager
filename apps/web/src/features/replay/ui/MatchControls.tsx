@@ -17,7 +17,8 @@ export const MatchControls = ({
   onStart,
   onPause,
   onReset,
-  onFinishRound
+  onFinishRound,
+  labels
 }: {
   isRunning: boolean;
   /** Partida ja tem vencedor — use Reiniciar */
@@ -28,9 +29,20 @@ export const MatchControls = ({
   onPause: () => void;
   onReset: () => void;
   onFinishRound?: () => void;
+  /** Rótulos opcionais (ex.: Sandbox com textos curtos) */
+  labels?: {
+    start?: string;
+    pause?: string;
+    finishRound?: string;
+    matchEnded?: string;
+  };
 }) => {
   const startDisabled = matchEnded === true;
   const finishDisabled = !canFinishRound || matchEnded;
+  const labelStart = labels?.start ?? "Iniciar partida";
+  const labelPause = labels?.pause ?? "Pausar";
+  const labelFinish = labels?.finishRound ?? "Finalizar round";
+  const labelEnded = labels?.matchEnded ?? "Partida encerrada";
   return (
     <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
       <button
@@ -43,7 +55,7 @@ export const MatchControls = ({
           cursor: startDisabled ? "not-allowed" : "pointer"
         }}
       >
-        {matchEnded ? "Partida encerrada" : isRunning ? "Pausar" : "Iniciar partida"}
+        {matchEnded ? labelEnded : isRunning ? labelPause : labelStart}
       </button>
       {onFinishRound && (
         <button
@@ -63,7 +75,7 @@ export const MatchControls = ({
             borderColor: "#2d5a47"
           }}
         >
-          Finalizar round
+          {labelFinish}
         </button>
       )}
       <button type="button" onClick={onReset} style={{ ...btnStyle, background: "#2a1f1f", borderColor: "#5c3030" }}>

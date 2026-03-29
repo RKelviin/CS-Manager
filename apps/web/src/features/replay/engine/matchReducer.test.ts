@@ -79,6 +79,19 @@ describe("matchReducer", () => {
     expect(resumed.isRunning).toBe(true);
   });
 
+  it("STEP avança um tick com simulação pausada em sandboxMode", () => {
+    const initial = createMatchState({ ...setup, sandboxMode: true });
+    expect(initial.isRunning).toBe(false);
+    const stepped = matchReducer(initial, { type: "STEP", deltaMs: 100 });
+    expect(stepped.tickId).toBe((initial.tickId ?? 0) + 1);
+  });
+
+  it("STEP sem sandboxMode não altera estado", () => {
+    const initial = createMatchState(setup);
+    const stepped = matchReducer(initial, { type: "STEP", deltaMs: 100 });
+    expect(stepped).toBe(initial);
+  });
+
   it("fim de partida em 7 pontos", () => {
     const initial = createMatchState(setup);
     const withSix = {

@@ -35,6 +35,7 @@ Baseado na [Arquitetura](ARQUITETURA.md) do projeto.
 
 ### Replay
 - Engine 2D: movimento, combate, plant/defuse, economia
+- **Sandbox (laboratório):** página dedicada com `sandboxMatchRegistry`, evento `STEP` (tick único com pausa), overrides de combate por arma (0–200%), primária forçada para todos os bots, spawn por clique, malha/path de nav no canvas — ver `docs/ENGINE.md`
 - HUD: placar, bandeiras, armas, KDA, drop para companheiro
 - **Drops de arma:** primária no chão à morte (exceto pistola), pickup por qualquer time com upgrade por tier, ícone no mapa com rotação da mira do morto
 - **Partidas ao vivo:** lista de partidas em andamento no registry, ordenação por média de rating global; destaque automático do “melhor” confronto; vista espetador (placar + times + mapa)

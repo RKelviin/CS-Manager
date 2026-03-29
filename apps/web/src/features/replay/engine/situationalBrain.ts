@@ -118,7 +118,7 @@ const clampToMap = (map: { width: number; height: number }, x: number, y: number
  * Inimigos com tiros recentes audiveis (sem LOS) — mesmo criterio para mira e movimento.
  */
 export const heardGunfireEnemies = (bot: Bot, state: MatchState, tickId: number): Bot[] => {
-  const rng = getWeaponRangeForRole(bot);
+  const rng = getWeaponRangeForRole(bot, state);
   return enemiesOf(state, bot).filter(
     (e) =>
       e.hp > 0 &&
@@ -142,7 +142,7 @@ export const pickPrimaryHeardEnemy = (bot: Bot, heard: Bot[], tickId: number): B
 
 /** Inimigos que se moveram recentemente (passos audiveis, sem LOS) */
 export const heardFootstepEnemies = (bot: Bot, state: MatchState, tickId: number): Bot[] => {
-  const rng = getWeaponRangeForRole(bot);
+  const rng = getWeaponRangeForRole(bot, state);
   return enemiesOf(state, bot).filter(
     (e) =>
       e.hp > 0 &&
@@ -584,7 +584,7 @@ const T_SAFE_ANCHOR = { x: 400, y: 460 };
  */
 const postPlantTDefenseTarget = (bot: Bot, state: MatchState): { x: number; y: number } => {
   const bomb = getPlantedBombWorldPos(state)!;
-  const rng = getWeaponRangeForRole(bot);
+  const rng = getWeaponRangeForRole(bot, state);
   let vx = T_SAFE_ANCHOR.x - bomb.x;
   let vy = T_SAFE_ANCHOR.y - bomb.y;
   const d0 = Math.hypot(vx, vy) || 1;
@@ -960,7 +960,7 @@ export const computeDesiredAimAngle = (
   tickId: number,
   view?: PlayerView
 ): number => {
-  const rng = getWeaponRangeForRole(bot);
+  const rng = getWeaponRangeForRole(bot, state);
 
   const visible = view
     ? view.enemiesInFov.map((x) => x.bot)

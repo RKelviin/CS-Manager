@@ -8,7 +8,7 @@
  */
 
 export { MatchProvider, useMatchContext, useMatch } from "./state/MatchContext";
-export { matchRegistry } from "./state/matchRegistry";
+export { matchRegistry, sandboxMatchRegistry } from "./state/matchRegistry";
 export type { StartMatchResult } from "./state/matchRegistry";
 
 export * as simulation from "./simulation";
@@ -30,7 +30,22 @@ export {
 } from "./domain/teamModel";
 export type { TeamSide } from "./domain/teamModel";
 
-export type { MatchSetup, MatchState, MatchEvent, Bot, MatchType, StartsAsSide } from "./types";
+export type {
+  MatchSetup,
+  MatchState,
+  MatchEvent,
+  Bot,
+  MatchType,
+  StartsAsSide,
+  RedStrategy,
+  BluStrategy,
+  SandboxCombatOverrides,
+  SandboxWeaponCombatUI
+} from "./types";
 
 export { createMatchState } from "./engine/createMatchState";
+export { createSandboxBot } from "./engine/createSandboxBot";
+export { secondaryPistolForBotTeam } from "./engine/roundBuy";
+export { SANDBOX_SELECTABLE_PRIMARIES } from "./engine/sandboxWeapons";
+export type { SandboxSelectablePrimary } from "./engine/sandboxWeapons";
 export { matchReducer, getDecisionOrder } from "./engine/matchReducer";

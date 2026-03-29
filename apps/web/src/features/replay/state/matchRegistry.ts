@@ -199,5 +199,8 @@ class MatchRegistryImpl {
 
 export const matchRegistry = new MatchRegistryImpl();
 
+/** Partidas do laboratório (Sandbox) — não aparecem na barra de partidas da liga. */
+export const sandboxMatchRegistry = new MatchRegistryImpl();
+
 /** Tipo de retorno ao iniciar uma partida */
 export type StartMatchResult = { matchId: string };

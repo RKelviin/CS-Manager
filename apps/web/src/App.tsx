@@ -3,6 +3,7 @@ import { BoosterPackPage } from "./pages/BoosterPackPage";
 import { ChampionshipPage } from "./pages/ChampionshipPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { MapEditorPage } from "./pages/MapEditorPage";
+import { PlaytestLabPage } from "./pages/PlaytestLabPage";
 import { MarketPage } from "./pages/MarketPage";
 import { RankingPage } from "./pages/RankingPage";
 import { LiveMatchesPage } from "./pages/LiveMatchesPage";
@@ -30,7 +31,8 @@ const NAV_ITEMS = [
   { key: "simulation", label: "Simulação" },
   { key: "strategies", label: "Estratégias" },
   { key: "ranking", label: "Ranking" },
-  { key: "mapeditor", label: "Editor de mapas" }
+  { key: "mapeditor", label: "Editor de mapas" },
+  { key: "playtestlab", label: "Sandbox" }
 ] as const;
 
 type NavKey = (typeof NAV_ITEMS)[number]["key"] | "auth" | "user";
@@ -56,6 +58,7 @@ const AppContent = () => {
     if (activeTab === "boosterpack") return <BoosterPackPage />;
     if (activeTab === "ranking") return <RankingPage />;
     if (activeTab === "mapeditor") return <MapEditorPage />;
+    if (activeTab === "playtestlab") return <PlaytestLabPage />;
     return <DashboardPage />;
   }, [activeTab]);
 
@@ -68,7 +71,8 @@ const AppContent = () => {
     activeTab === "simulation" ||
     activeTab === "livematches" ||
     activeTab === "championships" ||
-    activeTab === "mapeditor"
+    activeTab === "mapeditor" ||
+    activeTab === "playtestlab"
       ? 1520
       : 800;
 
